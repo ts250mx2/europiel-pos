@@ -32,6 +32,7 @@ static class Program
         // Servicios de negocio (ports de las clases BL del proyecto VB original)
         builder.Services.AddScoped<IParametroService, ParametroService>();
         builder.Services.AddScoped<ISucursalService, SucursalService>();
+        builder.Services.AddScoped<IPacienteService, PacienteService>();
 
         // Formularios: se registran para poder recibir dependencias por constructor
         builder.Services.AddTransient<MainForm>();
