@@ -40,6 +40,12 @@ static class Program
         builder.Services.AddScoped<IPaqueteService, PaqueteService>();
         builder.Services.AddScoped<IPaqueteEnvioService, PaqueteService>();
         builder.Services.AddScoped<IPaqueteValidacionesService, PaqueteService>();
+        builder.Services.AddScoped<ILogInterfazService, LogInterfazService>();
+        builder.Services.AddScoped<IRespuestaNetpayService, RespuestaNetpayService>();
+        builder.Services.AddScoped<ICorreoService, CorreoService>();
+
+        // Configuración tipada
+        builder.Services.Configure<CorreoSettings>(builder.Configuration.GetSection("Correo"));
 
         // Formularios: se registran para poder recibir dependencias por constructor
         builder.Services.AddTransient<MainForm>();
