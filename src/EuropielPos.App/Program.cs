@@ -34,6 +34,7 @@ static class Program
         builder.Services.AddScoped<ISucursalService, SucursalService>();
         builder.Services.AddScoped<IPacienteService, PacienteService>();
         builder.Services.AddScoped<ICitaService, CitaService>();
+        builder.Services.AddScoped<IRequerimientoService, RequerimientoService>();
 
         // Formularios: se registran para poder recibir dependencias por constructor
         builder.Services.AddTransient<MainForm>();
