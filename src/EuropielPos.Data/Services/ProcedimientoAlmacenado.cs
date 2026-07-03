@@ -46,6 +46,41 @@ internal static class ProcedimientoAlmacenado
         return tabla;
     }
 
+    public static async Task<object?> EscalarAsync(
+        PosDbContext db,
+        string nombre,
+        IReadOnlyDictionary<string, object?> parametros,
+        CancellationToken ct = default)
+    {
+        DbConnection conn = db.Database.GetDbConnection();
+        bool cerrarConexion = conn.State == ConnectionState.Closed;
+        if (cerrarConexion)
+            await conn.OpenAsync(ct);
+
+        try
+        {
+            await using DbCommand cmd = conn.CreateCommand();
+            cmd.CommandText = nombre;
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.CommandTimeout = 300;
+
+            foreach (var (clave, valor) in parametros)
+            {
+                DbParameter p = cmd.CreateParameter();
+                p.ParameterName = clave;
+                p.Value = valor ?? DBNull.Value;
+                cmd.Parameters.Add(p);
+            }
+
+            return await cmd.ExecuteScalarAsync(ct);
+        }
+        finally
+        {
+            if (cerrarConexion)
+                await conn.CloseAsync();
+        }
+    }
+
     private static async Task EjecutarConReaderAsync(
         PosDbContext db,
         string nombre,
