@@ -43,9 +43,19 @@ static class Program
         builder.Services.AddScoped<ILogInterfazService, LogInterfazService>();
         builder.Services.AddScoped<IRespuestaNetpayService, RespuestaNetpayService>();
         builder.Services.AddScoped<ICorreoService, CorreoService>();
+        builder.Services.AddScoped<IBancosPosService, BancosPosService>();
+        builder.Services.AddScoped<IPaqueteServicioPasoService, PaqueteServicioPasoService>();
+        builder.Services.AddScoped<IParametroAnticipoService, ParametroAnticipoService>();
+        builder.Services.AddScoped<IEquiposService, EquiposService>();
+        builder.Services.AddScoped<IMensajeService, MensajeService>();
+        builder.Services.AddScoped<IGeneralService, GeneralService>();
+        builder.Services.AddScoped<IDocumentoService, DocumentoService>();
+        builder.Services.AddScoped<IReconocimientoFacialService, ReconocimientoFacialService>();
+        builder.Services.AddScoped<IS3Service, S3Service>();
 
         // Configuración tipada
         builder.Services.Configure<CorreoSettings>(builder.Configuration.GetSection("Correo"));
+        builder.Services.Configure<AwsS3Settings>(builder.Configuration.GetSection("AwsS3"));
 
         // Formularios: se registran para poder recibir dependencias por constructor
         builder.Services.AddTransient<MainForm>();
