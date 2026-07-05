@@ -26,11 +26,13 @@ public class SincronizacionSettings
 /// </summary>
 public interface IClienteApiPos
 {
-    /// <summary>POST que deserializa la respuesta a <typeparamref name="T"/>.</summary>
-    Task<T?> PostAsync<T>(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, CancellationToken ct = default);
+    /// <summary>POST que deserializa la respuesta a <typeparamref name="T"/>.
+    /// <paramref name="timeoutSegundos"/> permite sobrescribir el timeout por
+    /// petición (las citas y alertas usaban 90s en el original).</summary>
+    Task<T?> PostAsync<T>(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, int? timeoutSegundos = null, CancellationToken ct = default);
 
     /// <summary>POST que devuelve el cuerpo crudo de la respuesta.</summary>
-    Task<string> PostCrudoAsync(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, CancellationToken ct = default);
+    Task<string> PostCrudoAsync(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, int? timeoutSegundos = null, CancellationToken ct = default);
 
     /// <summary>Port de <c>CheckForInternetConnection</c>: ¿responde el API?</summary>
     Task<bool> HayConexionAsync(CancellationToken ct = default);
@@ -50,18 +52,23 @@ public class ClienteApiPos : IClienteApiPos
     {
         _settings = settings.Value;
         _http = http;
-        _http.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSegundos);
+        // El timeout real se aplica por petición (permite los 90s de citas).
+        _http.Timeout = Timeout.InfiniteTimeSpan;
     }
 
-    public async Task<T?> PostAsync<T>(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, CancellationToken ct = default)
+    public async Task<T?> PostAsync<T>(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, int? timeoutSegundos = null, CancellationToken ct = default)
     {
-        string respuesta = await PostCrudoAsync(servicio, cuerpoJson, headersExtra, ct);
+        string respuesta = await PostCrudoAsync(servicio, cuerpoJson, headersExtra, timeoutSegundos, ct);
 
         return JsonSerializer.Deserialize<T>(respuesta, OpcionesJson);
     }
 
-    public async Task<string> PostCrudoAsync(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, CancellationToken ct = default)
+    public async Task<string> PostCrudoAsync(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, int? timeoutSegundos = null, CancellationToken ct = default)
     {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(timeoutSegundos ?? _settings.TimeoutSegundos));
+        ct = cts.Token;
+
         using var peticion = new HttpRequestMessage(HttpMethod.Post, _settings.UrlApi + servicio)
         {
             Content = new StringContent(cuerpoJson, Encoding.UTF8, "application/json"),
@@ -89,7 +96,10 @@ public class ClienteApiPos : IClienteApiPos
     {
         try
         {
-            using var respuesta = await _http.GetAsync(_settings.UrlApi, ct);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(_settings.TimeoutSegundos));
+
+            using var respuesta = await _http.GetAsync(_settings.UrlApi, cts.Token);
             return true;
         }
         catch

@@ -47,7 +47,7 @@ public class InterfazSucursalesService : IInterfazSucursalesService
                 {
                     ["ClaveBloque"] = claveBloque.ToString(),
                     ["IdBloque"] = idBloque.ToString(),
-                }, ct);
+                }, ct: ct);
 
             var sucursalesApi = respuesta?.Value?.Sucursales;
             if (sucursalesApi is null || sucursalesApi.Count == 0)
@@ -274,7 +274,7 @@ public class InterfazSucursalesService : IInterfazSucursalesService
 
             var respuesta = await _api.PostAsync<RespuestaSimple>(
                 "/api/europielpos/SendMessageToSlack", cuerpo,
-                new Dictionary<string, string> { ["ClaveBloque"] = _contexto.ClaveBloque }, ct);
+                new Dictionary<string, string> { ["ClaveBloque"] = _contexto.ClaveBloque }, ct: ct);
 
             if (respuesta is not null && respuesta.Message != "ok")
                 return "Error HttpPost_SendMessageToSlack: " + respuesta.Message;

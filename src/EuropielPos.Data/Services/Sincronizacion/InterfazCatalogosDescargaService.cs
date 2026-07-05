@@ -138,7 +138,7 @@ public class InterfazCatalogosDescargaService : IInterfazCatalogosDescargaServic
             string cuerpo = await CuerpoIdSucursalAsync(ct);
 
             var respuesta = await _api.PostAsync<RespuestaApi<ValorServicios>>(
-                "/api/europielpos/GetServicios", cuerpo, HeaderBloque(claveBloque), ct);
+                "/api/europielpos/GetServicios", cuerpo, HeaderBloque(claveBloque), ct: ct);
 
             var servicios = respuesta?.Value?.Servicios;
             if (servicios is null || servicios.Count == 0)
@@ -191,7 +191,7 @@ public class InterfazCatalogosDescargaService : IInterfazCatalogosDescargaServic
             string cuerpo = await CuerpoIdSucursalAsync(ct);
 
             var respuesta = await _api.PostAsync<RespuestaApi<ValorUsuarios>>(
-                "/api/europielpos/GetUsuarios", cuerpo, HeaderBloque(claveBloque), ct);
+                "/api/europielpos/GetUsuarios", cuerpo, HeaderBloque(claveBloque), ct: ct);
 
             var usuarios = respuesta?.Value?.Usuarios;
             if (usuarios is null || usuarios.Count == 0)
@@ -238,7 +238,7 @@ public class InterfazCatalogosDescargaService : IInterfazCatalogosDescargaServic
             string cuerpo = await CuerpoIdSucursalAsync(ct);
 
             var respuesta = await _api.PostAsync<FechaServidorRespuesta>(
-                "/api/europielpos/GetServerDate", cuerpo, HeaderBloque(claveBloque), ct);
+                "/api/europielpos/GetServerDate", cuerpo, HeaderBloque(claveBloque), ct: ct);
 
             if (respuesta is not null && !string.IsNullOrEmpty(respuesta.Message))
                 return respuesta.fecha_servidor;
@@ -258,7 +258,7 @@ public class InterfazCatalogosDescargaService : IInterfazCatalogosDescargaServic
             string cuerpo = await CuerpoIdSucursalAsync(ct);
 
             return await _api.PostAsync<FechaServidorDetalleRespuesta>(
-                "/api/europielpos/GetServerDateDetail", cuerpo, HeaderBloque(claveBloque), ct);
+                "/api/europielpos/GetServerDateDetail", cuerpo, HeaderBloque(claveBloque), ct: ct);
         }
         catch (Exception ex)
         {
@@ -275,7 +275,7 @@ public class InterfazCatalogosDescargaService : IInterfazCatalogosDescargaServic
             string cuerpo = await CuerpoIdSucursalAsync(ct);
 
             var respuesta = await _api.PostAsync<RespuestaApi<ValorHorariosCierreJuntas>>(
-                "/api/europielpos/GetHorariosCierreJuntas", cuerpo, HeaderBloque(claveBloque), ct);
+                "/api/europielpos/GetHorariosCierreJuntas", cuerpo, HeaderBloque(claveBloque), ct: ct);
 
             var horarios = respuesta?.Value?.HorariosCierreJuntas;
             if (horarios is null || horarios.Count == 0)
@@ -353,7 +353,7 @@ public class InterfazCatalogosDescargaService : IInterfazCatalogosDescargaServic
             string cuerpo = $"{{ \"IdSucursal\": \"{_contexto.IdSucursal}\" }}";
 
             var respuesta = await _api.PostAsync<RespuestaApi<ValorPrecioServicio>>(
-                "/api/europielpos/GetConfigPrecioServicio", cuerpo, HeaderBloque(claveBloque), ct);
+                "/api/europielpos/GetConfigPrecioServicio", cuerpo, HeaderBloque(claveBloque), ct: ct);
 
             var configs = respuesta?.Value?.PrecioServicio;
             if (configs is null || configs.Count == 0)

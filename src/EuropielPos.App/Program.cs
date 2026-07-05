@@ -60,6 +60,7 @@ static class Program
         builder.Services.AddScoped<IInterfazCatalogosService, InterfazCatalogosService>();
         builder.Services.AddScoped<IInterfazSucursalesService, InterfazSucursalesService>();
         builder.Services.AddScoped<IInterfazCatalogosDescargaService, InterfazCatalogosDescargaService>();
+        builder.Services.AddScoped<IInterfazEnvioService, InterfazEnvioService>();
 
         // Configuración tipada
         builder.Services.Configure<CorreoSettings>(builder.Configuration.GetSection("Correo"));
