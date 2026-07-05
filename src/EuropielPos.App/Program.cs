@@ -55,8 +55,10 @@ static class Program
         builder.Services.AddScoped<IS3Service, S3Service>();
 
         // Motor de sincronización con el servidor central
+        builder.Services.AddSingleton<EuropielPos.Domain.Sincronizacion.ContextoPos>();
         builder.Services.AddHttpClient<IClienteApiPos, ClienteApiPos>();
         builder.Services.AddScoped<IInterfazCatalogosService, InterfazCatalogosService>();
+        builder.Services.AddScoped<IInterfazSucursalesService, InterfazSucursalesService>();
 
         // Configuración tipada
         builder.Services.Configure<CorreoSettings>(builder.Configuration.GetSection("Correo"));
