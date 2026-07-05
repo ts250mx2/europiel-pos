@@ -1,5 +1,6 @@
 using EuropielPos.Data;
 using EuropielPos.Data.Services;
+using EuropielPos.Data.Services.Sincronizacion;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,9 +54,14 @@ static class Program
         builder.Services.AddScoped<IReconocimientoFacialService, ReconocimientoFacialService>();
         builder.Services.AddScoped<IS3Service, S3Service>();
 
+        // Motor de sincronización con el servidor central
+        builder.Services.AddHttpClient<IClienteApiPos, ClienteApiPos>();
+        builder.Services.AddScoped<IInterfazCatalogosService, InterfazCatalogosService>();
+
         // Configuración tipada
         builder.Services.Configure<CorreoSettings>(builder.Configuration.GetSection("Correo"));
         builder.Services.Configure<AwsS3Settings>(builder.Configuration.GetSection("AwsS3"));
+        builder.Services.Configure<SincronizacionSettings>(builder.Configuration.GetSection("Sincronizacion"));
 
         // Formularios: se registran para poder recibir dependencias por constructor
         builder.Services.AddTransient<MainForm>();
