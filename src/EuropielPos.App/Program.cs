@@ -61,8 +61,11 @@ static class Program
         builder.Services.AddScoped<IInterfazSucursalesService, InterfazSucursalesService>();
         builder.Services.AddScoped<IInterfazCatalogosDescargaService, InterfazCatalogosDescargaService>();
         builder.Services.AddScoped<IInterfazEnvioService, InterfazEnvioService>();
-        builder.Services.AddScoped<IInterfazTransaccionesService, InterfazTransaccionesService>();
-        builder.Services.AddScoped<IInterfazTransaccionesRestantes, InterfazTransaccionesService>();
+        builder.Services.AddScoped<InterfazTransaccionesService>();
+        builder.Services.AddScoped<IInterfazTransaccionesService>(s => s.GetRequiredService<InterfazTransaccionesService>());
+        builder.Services.AddScoped<IInterfazTransaccionesRestantes>(s => s.GetRequiredService<InterfazTransaccionesService>());
+        builder.Services.AddScoped<IInterfazExtras>(s => s.GetRequiredService<InterfazTransaccionesService>());
+        builder.Services.AddScoped<ISincronizacionOrquestador, SincronizacionOrquestador>();
 
         // Configuración tipada
         builder.Services.Configure<CorreoSettings>(builder.Configuration.GetSection("Correo"));
