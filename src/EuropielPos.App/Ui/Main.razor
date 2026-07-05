@@ -13,15 +13,38 @@
 </Router>
 
 @code {
-    // Tema Europiel: acento dorado/café sobre base limpia.
+    // Paleta de marca Europiel Láser Center:
+    //   carbón #2C3840 (fondo del logo), turquesas de los círculos
+    //   (#A8E4EC → #6FCFDE → #35AABD → #1D8296), blanco y gris claro.
+    public const string Carbon = "#2C3840";
+    public const string CarbonClaro = "#3A4750";
+    public const string Turquesa = "#1D8296";
+    public const string TurquesaMedio = "#35AABD";
+    public const string TurquesaClaro = "#6FCFDE";
+    public const string TurquesaSuave = "#A8E4EC";
+
     private readonly MudTheme _tema = new()
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#8A6D3B",
-            Secondary = "#C9A66B",
-            AppbarBackground = "#8A6D3B",
-            Background = "#F7F5F2",
+            Primary = Turquesa,
+            PrimaryLighten = TurquesaClaro,
+            PrimaryDarken = "#136575",
+            Secondary = TurquesaMedio,
+            Tertiary = TurquesaSuave,
+            AppbarBackground = Carbon,
+            AppbarText = "#FFFFFF",
+            Background = "#F2F6F7",
+            Surface = "#FFFFFF",
+            TextPrimary = Carbon,
+            TextSecondary = "#5C6B73",
+            DrawerBackground = Carbon,
+            DrawerText = "#D7DDE0",
+            Info = TurquesaMedio,
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "10px",
         },
     };
 }

@@ -3,12 +3,26 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center" Style="height: 90vh;">
-    <MudPaper Elevation="6" Class="pa-8 rounded-xl mx-auto" Style="width: 420px;">
-        <MudStack AlignItems="AlignItems.Center" Spacing="1" Class="mb-6">
-            <MudIcon Icon="@Icons.Material.Filled.Spa" Color="Color.Primary" Style="font-size: 3.5rem;" />
-            <MudText Typo="Typo.h4" Color="Color.Primary"><b>europiel</b></MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Punto de venta</MudText>
+@* Fondo carbón del logo, con la tarjeta de acceso al centro *@
+<div style="min-height: 100vh; background: linear-gradient(160deg, @Main.Carbon 0%, @Main.CarbonClaro 60%, #46545E 100%);
+            display: flex; align-items: center; justify-content: center;">
+
+    <MudPaper Elevation="12" Class="pa-10 rounded-xl" Style="width: 430px; background: #FFFFFF;">
+
+        @* Logotipo: círculos turquesa + euro(blanco→carbón)piel(turquesa) *@
+        <MudStack AlignItems="AlignItems.Center" Spacing="0" Class="mb-8">
+            <div style="display: flex; gap: 7px; margin-bottom: 10px;">
+                <span style="width:17px; height:17px; border-radius:50%; background:@Main.TurquesaSuave;"></span>
+                <span style="width:17px; height:17px; border-radius:50%; background:@Main.TurquesaClaro;"></span>
+                <span style="width:17px; height:17px; border-radius:50%; background:@Main.TurquesaMedio;"></span>
+                <span style="width:17px; height:17px; border-radius:50%; background:@Main.Turquesa;"></span>
+            </div>
+            <div style="font-size: 2.6rem; font-weight: 700; letter-spacing: -1px; line-height: 1;">
+                <span style="color:@Main.Carbon;">euro</span><span style="color:@Main.TurquesaMedio;">piel</span>
+            </div>
+            <MudText Style="@($"color:{Main.Carbon}; letter-spacing: 6px; font-size: .8rem; opacity: .65;")">
+                LÁSER CENTER
+            </MudText>
         </MudStack>
 
         <MudTextField T="string" @bind-Value="_login" Label="Usuario" Variant="Variant.Outlined"
@@ -23,20 +37,21 @@
                       Immediate="true" OnKeyDown="EnterEnCampo" Class="mb-6" />
 
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.Login" Disabled="_procesando" OnClick="Entrar">
+                   StartIcon="@Icons.Material.Filled.Login" Disabled="_procesando" OnClick="Entrar"
+                   Style="height: 52px; font-size: 1.05rem;">
             @(_procesando ? "Verificando..." : "Iniciar sesión")
         </MudButton>
 
         <MudDivider Class="my-6" />
 
         <MudStack Row="true" Justify="Justify.Center">
-            <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Secondary"
+            <MudButton Variant="Variant.Text" Size="Size.Small" Style="@($"color:{Main.Turquesa};")"
                        StartIcon="@Icons.Material.Filled.Settings" OnClick="@(() => Nav.NavigateTo("/configuracion"))">
                 Configurar esta caja
             </MudButton>
         </MudStack>
     </MudPaper>
-</MudContainer>
+</div>
 
 @code {
     private string _login = string.Empty;

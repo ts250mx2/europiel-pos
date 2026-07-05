@@ -5,11 +5,20 @@
 <MudLayout>
     @if (Sesion.Autenticado)
     {
-        <MudAppBar Elevation="1">
-            <MudIcon Icon="@Icons.Material.Filled.Spa" Class="mr-2" />
-            <MudText Typo="Typo.h6">EuropielPOS</MudText>
+        <MudAppBar Elevation="2">
+            @* Mini logotipo de marca en la barra *@
+            <div style="display: flex; gap: 4px; margin-right: 10px;">
+                <span style="width:9px; height:9px; border-radius:50%; background:@Main.TurquesaSuave;"></span>
+                <span style="width:9px; height:9px; border-radius:50%; background:@Main.TurquesaClaro;"></span>
+                <span style="width:9px; height:9px; border-radius:50%; background:@Main.TurquesaMedio;"></span>
+                <span style="width:9px; height:9px; border-radius:50%; background:@Main.Turquesa;"></span>
+            </div>
+            <MudText Typo="Typo.h6" Style="font-weight: 700; letter-spacing: -0.5px;">
+                <span style="color:#FFFFFF;">euro</span><span style="color:@Main.TurquesaClaro;">piel</span>
+            </MudText>
+            <MudText Typo="Typo.caption" Style="letter-spacing: 3px; opacity:.6; margin-left:10px;">POS</MudText>
             <MudSpacer />
-            <MudText Typo="Typo.body2" Class="mr-4">
+            <MudText Typo="Typo.body2" Class="mr-4" Style="opacity:.85;">
                 @Sesion.NombreSucursal · @Sesion.UsuarioNombre (@Sesion.TipoUsuario)
             </MudText>
             <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit"
