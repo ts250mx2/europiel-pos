@@ -60,6 +60,7 @@ static class Program
         builder.Services.AddMudServices();
         builder.Services.AddSingleton<EuropielPos.Domain.Sesion.SesionPos>();
         builder.Services.AddScoped<IAutenticacionService, AutenticacionService>();
+        builder.Services.AddScoped<IAgendaService, AgendaService>();
 
         // Motor de sincronización con el servidor central
         builder.Services.AddSingleton<EuropielPos.Domain.Sincronizacion.ContextoPos>();

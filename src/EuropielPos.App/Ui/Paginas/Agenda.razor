@@ -1,0 +1,179 @@
+@page "/agenda"
+@inject EuropielPos.Data.Services.IAgendaService AgendaServicio
+@inject EuropielPos.Data.Services.Sincronizacion.ISincronizacionOrquestador Orquestador
+@inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
+@inject EuropielPos.Domain.Sesion.SesionPos Sesion
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@if (!Sesion.Autenticado)
+{
+    <MudAlert Severity="Severity.Warning" Class="ma-8">
+        Sesión no iniciada. <MudLink Href="/">Ir al login</MudLink>
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+
+        @* ---------- Barra de la agenda ---------- *@
+        <MudPaper Elevation="2" Class="pa-4 rounded-xl mb-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/inicio"))" />
+                <MudText Typo="Typo.h5" Class="mr-4"><b>Agenda</b></MudText>
+
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="@(() => CambiarDia(-1))" />
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => IrAFecha(DateTime.Today))">Hoy</MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="@(() => CambiarDia(1))" />
+
+                <MudDatePicker Date="_fecha" DateChanged="@(f => IrAFecha(f ?? DateTime.Today))"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 180px;" />
+
+                <MudText Typo="Typo.subtitle1" Class="ml-2" Style="text-transform: capitalize;">
+                    @_fecha.ToString("dddd d 'de' MMMM")
+                </MudText>
+
+                <MudSpacer />
+
+                <MudChip T="string" Color="Color.Primary" Variant="Variant.Text">@_citas.Count citas</MudChip>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Sync" Disabled="_sincronizando" OnClick="Sincronizar">
+                    @(_sincronizando ? "Sincronizando..." : "Sincronizar")
+                </MudButton>
+            </MudStack>
+
+            @* Leyenda de colores (reglas del POS original) *@
+            <MudStack Row="true" Spacing="2" Class="mt-3" Wrap="Wrap.Wrap">
+                <MudChip T="string" Size="Size.Small" Style="@Pastilla("#1D8296")">Programada</MudChip>
+                <MudChip T="string" Size="Size.Small" Style="@Pastilla("#4CAF50")">Asistida</MudChip>
+                <MudChip T="string" Size="Size.Small" Style="@Pastilla("#8E5BC8")">Morada (cobranza)</MudChip>
+                <MudChip T="string" Size="Size.Small" Style="@Pastilla("#78909C")">Bloqueada</MudChip>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                         Icon="@Icons.Material.Filled.CloudOff">Pendiente de sincronizar</MudChip>
+            </MudStack>
+        </MudPaper>
+
+        @* ---------- Vista de día ---------- *@
+        @if (_cargando)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_citas.Count == 0)
+        {
+            <MudPaper Elevation="1" Class="pa-12 rounded-xl d-flex flex-column align-center">
+                <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Style="font-size: 4rem; opacity:.3;" />
+                <MudText Typo="Typo.h6" Class="mt-3 mud-text-secondary">Sin citas para este día</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudPaper Elevation="1" Class="rounded-xl" Style="overflow: hidden;">
+                @foreach (var hora in _horas)
+                {
+                    var citasHora = _citas.Where(c => c.FechaInicio?.Hour == hora).ToList();
+
+                    <div style="display: flex; border-bottom: 1px solid #E4EAEC; min-height: 56px;">
+                        <div style="width: 80px; flex-shrink: 0; padding: 10px; text-align: right;
+                                    color: #5C6B73; font-size: .85rem; border-right: 2px solid #D5DEE1;">
+                            @($"{hora:00}:00")
+                        </div>
+                        <div style="flex: 1; padding: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
+                            @foreach (var cita in citasHora)
+                            {
+                                <div style="@EstiloCita(cita)">
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <b>@cita.FechaInicio?.ToString("HH:mm")–@cita.FechaFin?.ToString("HH:mm")</b>
+                                        <span>@cita.Paciente</span>
+                                        @if (cita.PendienteSincronizar)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.CloudOff" Style="font-size:.95rem;"
+                                                     Title="Pendiente de sincronizar" />
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(cita.ListaServicios))
+                                    {
+                                        <div style="font-size:.75rem; opacity:.85; margin-top:2px;">@cita.ListaServicios</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(cita.TipoCita))
+                                    {
+                                        <div style="font-size:.7rem; opacity:.7;">@cita.TipoCita</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </MudPaper>
+        }
+    </MudContainer>
+}
+
+@code {
+    private DateTime _fecha = DateTime.Today;
+    private List<EuropielPos.Data.Services.CitaAgenda> _citas = [];
+    private bool _cargando;
+    private bool _sincronizando;
+    private readonly int[] _horas = Enumerable.Range(8, 14).ToArray(); // 8:00 a 21:00
+
+    protected override async Task OnInitializedAsync() => await Cargar();
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        try
+        {
+            _citas = await AgendaServicio.CitasDelDiaAsync(_fecha, Contexto.IdSucursal);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar la agenda: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task CambiarDia(int dias) => await IrAFecha(_fecha.AddDays(dias));
+
+    private async Task IrAFecha(DateTime fecha)
+    {
+        _fecha = fecha.Date;
+        await Cargar();
+    }
+
+    private async Task Sincronizar()
+    {
+        _sincronizando = true;
+        try
+        {
+            await Orquestador.ProcesoInterfazCitasAsync();
+            await Cargar();
+            Snackbar.Add("Agenda sincronizada.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al sincronizar: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _sincronizando = false;
+        }
+    }
+
+    // Colores según las reglas del original (cita_estatus_color).
+    private static string ColorDe(EuropielPos.Data.Services.CitaAgenda c) => c switch
+    {
+        { Bloqueada: true } => "#78909C",
+        { EsMorada: true } => "#8E5BC8",
+        { Asistida: true } => "#4CAF50",
+        _ => "#1D8296",
+    };
+
+    private static string EstiloCita(EuropielPos.Data.Services.CitaAgenda c) =>
+        $"background: {ColorDe(c)}; color: white; border-radius: 8px; padding: 6px 12px; " +
+        "min-width: 220px; box-shadow: 0 1px 3px rgba(0,0,0,.25); font-size: .85rem;";
+
+    private static string Pastilla(string color) =>
+        $"background: {color}; color: white;";
+}
