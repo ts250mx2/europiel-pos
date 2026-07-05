@@ -19,8 +19,15 @@ public class SincronizacionSettings
     /// hardcodeada en modGeneral.vb.</summary>
     public string ApiKeyEuroAsistente { get; set; } = string.Empty;
 
+    /// <summary>ApiKey del servicio de reconocimiento facial (Reko); estaba
+    /// hardcodeada en la clase CheckInGios del original.</summary>
+    public string ApiKeyReconocimientoFacial { get; set; } = string.Empty;
+
     /// <summary>Timeout por petición; el original usaba 20 segundos.</summary>
     public int TimeoutSegundos { get; set; } = 20;
+
+    /// <summary>URL del alta de suscripciones de Feenicia/Serti.</summary>
+    public string UrlFeeniciaSuscribe { get; set; } = "https://www.serti.tech/cronos-services/merchant/subscribe";
 }
 
 /// <summary>
@@ -82,7 +89,10 @@ public class ClienteApiPos : IClienteApiPos
             Content = new StringContent(cuerpoJson, Encoding.UTF8, "application/json"),
         };
 
-        peticion.Headers.Add("ApiKey", _settings.ApiKey);
+        // Los servicios con ApiKey propia (p. ej. reconocimiento facial) la
+        // mandan en headersExtra y sustituye a la general.
+        if (headersExtra is null || !headersExtra.ContainsKey("ApiKey"))
+            peticion.Headers.Add("ApiKey", _settings.ApiKey);
 
         // ClaveBloque siempre viaja; el valor por defecto del original era "1".
         if (headersExtra is null || !headersExtra.ContainsKey("ClaveBloque"))

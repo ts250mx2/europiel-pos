@@ -17,6 +17,12 @@ public interface IInterfazExtras
     Task<string> SendMensajeAsync(int idPaquete, bool clienteLiquidaEnSucursal, DateTime fechaVisitaCliente, int idPais, CancellationToken ct = default);
 
     Task<RespuestaCobroValidacionTarjeta> CobroValidacionTarjetaAsync(RequestValidacionTarjeta peticion, CancellationToken ct = default);
+
+    /// <summary>Datos del reporte diario. La generación del Excel (EPPlus en el
+    /// original) se hará en la fase de reportes; aquí se devuelve el JSON.</summary>
+    Task<JsonElement> GetReporteDiarioAsync(int claveBloque, DateTime fechaInicio, DateTime fechaFin, int idUsuario, CancellationToken ct = default);
+
+    Task<JsonElement> GetReporteConsultaCajaAsync(int claveBloque, DateTime fechaInicio, DateTime fechaFin, CancellationToken ct = default);
 }
 
 public partial class InterfazTransaccionesService : IInterfazExtras
@@ -135,6 +141,53 @@ public partial class InterfazTransaccionesService : IInterfazExtras
                 Estatus = "Error " + ex.Message,
                 Message = ex.Message,
             };
+        }
+    }
+
+    public async Task<JsonElement> GetReporteDiarioAsync(int claveBloque, DateTime fechaInicio, DateTime fechaFin, int idUsuario, CancellationToken ct = default)
+    {
+        try
+        {
+            string crudo = await _api.PostCrudoAsync("/api/europielpos/GetReporteDiario",
+                $"{{ \"IdSucursal\": \"{_contexto.IdSucursal}\", \"FechaInicio\": \"{Fecha(fechaInicio)}\", " +
+                $"\"FechaFin\": \"{Fecha(fechaFin)}\", \"IdUsuario\": \"{idUsuario}\" }}",
+                new Dictionary<string, string> { ["ClaveBloque"] = claveBloque.ToString() },
+                timeoutSegundos: 300, ct);
+
+            using var doc = JsonDocument.Parse(crudo);
+
+            return doc.RootElement.TryGetProperty("Value", out var v)
+                   && v.ValueKind == JsonValueKind.Object
+                   && v.TryGetProperty("ReporteDiario", out var reporte)
+                ? reporte.Clone()
+                : default;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Error HttpPost_GetReporteDiario: " + ex.Message, ex);
+        }
+    }
+
+    public async Task<JsonElement> GetReporteConsultaCajaAsync(int claveBloque, DateTime fechaInicio, DateTime fechaFin, CancellationToken ct = default)
+    {
+        try
+        {
+            string crudo = await _api.PostCrudoAsync("/api/europielpos/GetReporteConsultaCaja",
+                $"{{ \"IdSucursal\": \"{_contexto.IdSucursal}\", \"FechaInicio\": \"{Fecha(fechaInicio)}\", \"FechaFin\": \"{Fecha(fechaFin)}\" }}",
+                new Dictionary<string, string> { ["ClaveBloque"] = claveBloque.ToString() },
+                timeoutSegundos: 150, ct);
+
+            using var doc = JsonDocument.Parse(crudo);
+
+            return doc.RootElement.TryGetProperty("Value", out var v)
+                   && v.ValueKind == JsonValueKind.Object
+                   && v.TryGetProperty("ReporteConsultaCaja", out var reporte)
+                ? reporte.Clone()
+                : default;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Error HttpPost_GetReporteConsultaCaja: " + ex.Message, ex);
         }
     }
 

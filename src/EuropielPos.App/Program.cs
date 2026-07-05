@@ -66,6 +66,9 @@ static class Program
         builder.Services.AddScoped<IInterfazTransaccionesRestantes>(s => s.GetRequiredService<InterfazTransaccionesService>());
         builder.Services.AddScoped<IInterfazExtras>(s => s.GetRequiredService<InterfazTransaccionesService>());
         builder.Services.AddScoped<ISincronizacionOrquestador, SincronizacionOrquestador>();
+        builder.Services.AddScoped<ICheckInGiosService, CheckInGiosService>();
+        builder.Services.AddScoped<IUploadDocumentosService, UploadDocumentosService>();
+        builder.Services.AddHttpClient<IFeeniciaService, FeeniciaService>();
 
         // Configuración tipada
         builder.Services.Configure<CorreoSettings>(builder.Configuration.GetSection("Correo"));
