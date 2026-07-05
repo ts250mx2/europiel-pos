@@ -1,0 +1,30 @@
+@inherits LayoutComponentBase
+@inject EuropielPos.Domain.Sesion.SesionPos Sesion
+@inject NavigationManager Nav
+
+<MudLayout>
+    @if (Sesion.Autenticado)
+    {
+        <MudAppBar Elevation="1">
+            <MudIcon Icon="@Icons.Material.Filled.Spa" Class="mr-2" />
+            <MudText Typo="Typo.h6">EuropielPOS</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.body2" Class="mr-4">
+                @Sesion.NombreSucursal · @Sesion.UsuarioNombre (@Sesion.TipoUsuario)
+            </MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit"
+                           Title="Cerrar sesión" OnClick="CerrarSesion" />
+        </MudAppBar>
+    }
+    <MudMainContent>
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private void CerrarSesion()
+    {
+        Sesion.Cerrar();
+        Nav.NavigateTo("/");
+    }
+}

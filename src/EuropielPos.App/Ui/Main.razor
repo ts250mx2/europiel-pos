@@ -1,0 +1,27 @@
+<MudThemeProvider Theme="_tema" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<Router AppAssembly="@typeof(Main).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(DisenoPrincipal)" />
+    </Found>
+    <NotFound>
+        <MudText Typo="Typo.h5" Class="ma-8">Página no encontrada.</MudText>
+    </NotFound>
+</Router>
+
+@code {
+    // Tema Europiel: acento dorado/café sobre base limpia.
+    private readonly MudTheme _tema = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#8A6D3B",
+            Secondary = "#C9A66B",
+            AppbarBackground = "#8A6D3B",
+            Background = "#F7F5F2",
+        },
+    };
+}

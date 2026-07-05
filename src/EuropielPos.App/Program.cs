@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using MudBlazor.Services;
 
 namespace EuropielPos.App;
 
@@ -53,6 +54,12 @@ static class Program
         builder.Services.AddScoped<IDocumentoService, DocumentoService>();
         builder.Services.AddScoped<IReconocimientoFacialService, ReconocimientoFacialService>();
         builder.Services.AddScoped<IS3Service, S3Service>();
+
+        // UI Blazor Hybrid (MudBlazor dentro de la ventana WinForms)
+        builder.Services.AddWindowsFormsBlazorWebView();
+        builder.Services.AddMudServices();
+        builder.Services.AddSingleton<EuropielPos.Domain.Sesion.SesionPos>();
+        builder.Services.AddScoped<IAutenticacionService, AutenticacionService>();
 
         // Motor de sincronización con el servidor central
         builder.Services.AddSingleton<EuropielPos.Domain.Sincronizacion.ContextoPos>();

@@ -1,0 +1,163 @@
+@page "/configuracion"
+@inject EuropielPos.Data.Services.Sincronizacion.IInterfazCatalogosService Catalogos
+@inject EuropielPos.Data.Services.Sincronizacion.IInterfazSucursalesService Sucursales
+@inject EuropielPos.Data.Services.Sincronizacion.IInterfazCatalogosDescargaService Descargas
+@inject EuropielPos.Data.Services.Sincronizacion.ISincronizacionOrquestador Orquestador
+@inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-8">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-6">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/"))" />
+        <MudText Typo="Typo.h4">Configuración de la caja</MudText>
+    </MudStack>
+
+    <MudPaper Elevation="3" Class="pa-6 rounded-xl mb-6">
+        <MudText Typo="Typo.h6" Class="mb-4">1 · Sucursal y bloque</MudText>
+
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudDownload"
+                       Disabled="_cargandoCatalogo" OnClick="CargarSucursales">
+                @(_cargandoCatalogo ? "Consultando servidor..." : "Consultar sucursales")
+            </MudButton>
+            @if (_sucursales.Count > 0)
+            {
+                <MudChip T="string" Color="Color.Success" Size="Size.Small">@_sucursales.Count sucursales</MudChip>
+            }
+        </MudStack>
+
+        <MudSelect T="SucursalBloqueApi" @bind-Value="_sucursalSeleccionada" Label="Sucursal"
+                   Variant="Variant.Outlined" Disabled="_sucursales.Count == 0"
+                   ToStringFunc="@(s => s is null ? string.Empty : $"{s.Sucursal} ({s.NombreBloque})")" Class="mb-4">
+            @foreach (var s in _sucursales)
+            {
+                <MudSelectItem Value="@s">@s.Sucursal — @s.NombreBloque</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudNumericField T="int" @bind-Value="_noCaja" Label="Número de caja" Variant="Variant.Outlined"
+                         Min="1" Max="20" Style="max-width: 220px;" />
+    </MudPaper>
+
+    <MudPaper Elevation="3" Class="pa-6 rounded-xl">
+        <MudText Typo="Typo.h6" Class="mb-4">2 · Descarga inicial</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+            Descarga catálogos (sucursales, servicios, usuarios, configuraciones) y los datos
+            históricos de esta sucursal. Puede tardar varios minutos.
+        </MudText>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.SystemUpdateAlt"
+                   Disabled="@(_sucursalSeleccionada is null || _descargando)" OnClick="DescargarTodo">
+            @(_descargando ? "Descargando..." : "Configurar caja y descargar datos")
+        </MudButton>
+
+        @if (_descargando)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+        }
+
+        @if (_avances.Count > 0)
+        {
+            <MudPaper Elevation="0" Class="pa-4 mt-4 rounded-lg" Style="background: #F0EDE8; max-height: 260px; overflow-y: auto;">
+                @foreach (var linea in _avances)
+                {
+                    <MudText Typo="Typo.caption" Style="display:block;">@linea</MudText>
+                }
+            </MudPaper>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private readonly List<SucursalBloqueApi> _sucursales = [];
+    private SucursalBloqueApi? _sucursalSeleccionada;
+    private int _noCaja = 1;
+    private bool _cargandoCatalogo;
+    private bool _descargando;
+    private readonly List<string> _avances = [];
+
+    private async Task CargarSucursales()
+    {
+        _cargandoCatalogo = true;
+        try
+        {
+            var lista = await Catalogos.GetSucursalYBloqueAsync();
+            _sucursales.Clear();
+            _sucursales.AddRange(lista.OrderBy(s => s.NombreBloque).ThenBy(s => s.Sucursal));
+
+            if (_sucursales.Count == 0)
+                Snackbar.Add("El servidor no devolvió sucursales.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _cargandoCatalogo = false;
+        }
+    }
+
+    private async Task DescargarTodo()
+    {
+        if (_sucursalSeleccionada is null)
+            return;
+
+        _descargando = true;
+        _avances.Clear();
+
+        // Identidad de la caja antes de descargar (lo que el original ponía en modGeneral).
+        Contexto.IdSucursal = _sucursalSeleccionada.IdSucursal;
+        Contexto.IdBloque = _sucursalSeleccionada.IdBloque;
+        Contexto.ClaveBloque = _sucursalSeleccionada.ClaveBloque.ToString();
+        Contexto.NoCaja = _noCaja;
+
+        void Avance(string mensaje, bool _ = false)
+        {
+            _avances.Add($"[{DateTime.Now:HH:mm:ss}] {mensaje}");
+            InvokeAsync(StateHasChanged);
+        }
+
+        Orquestador.MensajeAvance += Avance;
+
+        try
+        {
+            int clave = _sucursalSeleccionada.ClaveBloque;
+
+            Avance("Descargando sucursales y parámetros...");
+            await Sucursales.GetSucursalesAsync(clave, _sucursalSeleccionada.IdBloque);
+
+            Avance("Descargando horarios y bonos...");
+            await Descargas.GetSucursalesHorarioAsync(clave);
+            await Descargas.GetSucursalesBonoAsync(clave);
+
+            Avance("Descargando servicios y usuarios...");
+            await Descargas.GetServiciosAsync(clave);
+            await Descargas.GetUsuariosAsync(clave);
+
+            Avance("Descargando configuraciones...");
+            await Descargas.GetConfigPagosPaqueteAsync(clave);
+            await Descargas.GetConfigPrecioServicioAsync(clave);
+            await Descargas.GetTipoIdentificacionAsync(clave);
+            await Descargas.GetServicioComboAsync(clave);
+
+            Avance("Iniciando carga inicial de datos (paquetes, pacientes, citas)...");
+            await Orquestador.ProcesoCargaInicialAsync();
+
+            Snackbar.Add("¡Caja configurada! Ya puedes iniciar sesión.", Severity.Success);
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            Avance("ERROR: " + ex.Message);
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            Orquestador.MensajeAvance -= Avance;
+            _descargando = false;
+        }
+    }
+}
