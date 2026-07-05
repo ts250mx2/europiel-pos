@@ -59,6 +59,7 @@ static class Program
         builder.Services.AddHttpClient<IClienteApiPos, ClienteApiPos>();
         builder.Services.AddScoped<IInterfazCatalogosService, InterfazCatalogosService>();
         builder.Services.AddScoped<IInterfazSucursalesService, InterfazSucursalesService>();
+        builder.Services.AddScoped<IInterfazCatalogosDescargaService, InterfazCatalogosDescargaService>();
 
         // Configuración tipada
         builder.Services.Configure<CorreoSettings>(builder.Configuration.GetSection("Correo"));
