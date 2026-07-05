@@ -24,7 +24,7 @@ public class AgendaServiceTests
         if (muestra is null)
             return; // BD sin citas
 
-        var servicio = new AgendaService(db);
+        var servicio = new AgendaService(db, envio: null!); // envío no se usa en consultas
         var citas = await servicio.CitasDelDiaAsync(muestra.FechaInicio!.Value.Date, muestra.IdSucursal!.Value);
 
         Assert.NotEmpty(citas);
@@ -43,7 +43,7 @@ public class AgendaServiceTests
     public async Task CitasDelDia_FechaSinCitas_DevuelveVacio()
     {
         await using var db = BaseDatosLocal.CrearContexto();
-        var servicio = new AgendaService(db);
+        var servicio = new AgendaService(db, envio: null!); // envío no se usa en consultas
 
         var citas = await servicio.CitasDelDiaAsync(new DateTime(1990, 1, 1), -1);
 

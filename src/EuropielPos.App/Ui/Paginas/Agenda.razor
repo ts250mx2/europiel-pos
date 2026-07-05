@@ -5,6 +5,7 @@
 @inject EuropielPos.Domain.Sesion.SesionPos Sesion
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDialogService Dialogos
 
 @if (!Sesion.Autenticado)
 {
@@ -80,7 +81,7 @@ else
                         <div style="flex: 1; padding: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
                             @foreach (var cita in citasHora)
                             {
-                                <div style="@EstiloCita(cita)">
+                                <div style="@EstiloCita(cita)" @onclick="@(() => AbrirDetalle(cita.IdLocal))">
                                     <div style="display:flex; align-items:center; gap:6px;">
                                         <b>@cita.FechaInicio?.ToString("HH:mm")–@cita.FechaFin?.ToString("HH:mm")</b>
                                         <span>@cita.Paciente</span>
@@ -106,6 +107,103 @@ else
             </MudPaper>
         }
     </MudContainer>
+
+    @* ---------- Dialog de detalle de cita ---------- *@
+    <MudDialog @bind-Visible="_detalleAbierto" Options="_opcionesDialog">
+        <TitleContent>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.EventNote" Color="Color.Primary" />
+                <MudText Typo="Typo.h6">Detalle de la cita</MudText>
+            </MudStack>
+        </TitleContent>
+        <DialogContent>
+            @if (_detalle is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else
+            {
+                <MudStack Spacing="3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                        <MudText Typo="Typo.subtitle1"><b>@_detalle.Paciente</b></MudText>
+                        @if (_detalle.PendienteSincronizar)
+                        {
+                            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.CloudOff"
+                                     Color="Color.Warning">Sin sincronizar</MudChip>
+                        }
+                    </MudStack>
+
+                    <MudGrid Spacing="2">
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Horario</MudText>
+                            <MudText Typo="Typo.body2">
+                                @_detalle.FechaInicio?.ToString("dd/MM/yyyy HH:mm") – @_detalle.FechaFin?.ToString("HH:mm")
+                            </MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Tipo</MudText>
+                            <MudText Typo="Typo.body2">@(_detalle.TipoCita ?? "—")</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Teléfonos</MudText>
+                            <MudText Typo="Typo.body2">@Junta(_detalle.Telefono1, _detalle.Telefono2)</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Email</MudText>
+                            <MudText Typo="Typo.body2">@(string.IsNullOrWhiteSpace(_detalle.Email) ? "—" : _detalle.Email)</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Paquete</MudText>
+                            <MudText Typo="Typo.body2">@(_detalle.IdPaquete is > 0 ? $"#{_detalle.IdPaquete}" : "—")</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Agendada el</MudText>
+                            <MudText Typo="Typo.body2">@(_detalle.FechaAlta?.ToString("dd/MM/yyyy HH:mm") ?? "—")</MudText>
+                        </MudItem>
+                    </MudGrid>
+
+                    <div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1">Servicios</MudText>
+                        @if (_detalle.Servicios.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2">—</MudText>
+                        }
+                        else
+                        {
+                            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                                @foreach (var servicio in _detalle.Servicios)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@servicio</MudChip>
+                                }
+                            </MudStack>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_detalle.MsgEstatusInterfaz))
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true">
+                            Servidor: @_detalle.MsgEstatusInterfaz
+                        </MudAlert>
+                    }
+                </MudStack>
+            }
+        </DialogContent>
+        <DialogActions>
+            @if (_detalle is not null)
+            {
+                @if (_detalle.PendienteSincronizar)
+                {
+                    <MudButton Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudUpload"
+                               Disabled="_accionEnCurso" OnClick="EnviarAhora">Enviar ahora</MudButton>
+                }
+                <MudButton Color="Color.Error" StartIcon="@Icons.Material.Filled.EventBusy"
+                           Disabled="_accionEnCurso" OnClick="CancelarCita">Cancelar cita</MudButton>
+            }
+            <MudSpacer />
+            <MudButton OnClick="@(() => _detalleAbierto = false)">Cerrar</MudButton>
+        </DialogActions>
+    </MudDialog>
 }
 
 @code {
@@ -114,6 +212,103 @@ else
     private bool _cargando;
     private bool _sincronizando;
     private readonly int[] _horas = Enumerable.Range(8, 14).ToArray(); // 8:00 a 21:00
+
+    // Dialog de detalle
+    private bool _detalleAbierto;
+    private bool _accionEnCurso;
+    private EuropielPos.Data.Services.CitaDetalle? _detalle;
+    private readonly DialogOptions _opcionesDialog = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+    private async Task AbrirDetalle(int idLocal)
+    {
+        _detalle = null;
+        _detalleAbierto = true;
+
+        try
+        {
+            _detalle = await AgendaServicio.DetalleCitaAsync(idLocal);
+
+            if (_detalle is null)
+            {
+                _detalleAbierto = false;
+                Snackbar.Add("La cita ya no existe; actualizando agenda.", Severity.Info);
+                await Cargar();
+            }
+        }
+        catch (Exception ex)
+        {
+            _detalleAbierto = false;
+            Snackbar.Add("Error al cargar el detalle: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task EnviarAhora()
+    {
+        if (_detalle is null)
+            return;
+
+        _accionEnCurso = true;
+        try
+        {
+            await Orquestador.EnvioCitaOnLineAsync(_detalle.IdLocal);
+            Snackbar.Add("Cita enviada al servidor.", Severity.Success);
+            await AbrirDetalle(_detalle.IdLocal); // recargar con estado nuevo
+            await Cargar();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _accionEnCurso = false;
+        }
+    }
+
+    private async Task CancelarCita()
+    {
+        if (_detalle is null)
+            return;
+
+        bool? confirmado = await Dialogos.ShowMessageBox(
+            "Cancelar cita",
+            $"¿Seguro que deseas borrar la cita de {_detalle.Paciente}?",
+            yesText: "Sí, cancelar", cancelText: "No");
+
+        if (confirmado != true)
+            return;
+
+        _accionEnCurso = true;
+        try
+        {
+            string? error = await AgendaServicio.CancelarCitaAsync(_detalle.IdLocal, Sesion.IdUsuario);
+
+            if (error is null)
+            {
+                _detalleAbierto = false;
+                Snackbar.Add("Cita cancelada.", Severity.Success);
+                await Cargar();
+            }
+            else
+            {
+                Snackbar.Add(error, Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _accionEnCurso = false;
+        }
+    }
+
+    private static string Junta(string? a, string? b)
+    {
+        var partes = new[] { a, b }.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+        return partes.Count == 0 ? "—" : string.Join(" / ", partes);
+    }
 
     protected override async Task OnInitializedAsync() => await Cargar();
 
@@ -172,7 +367,7 @@ else
 
     private static string EstiloCita(EuropielPos.Data.Services.CitaAgenda c) =>
         $"background: {ColorDe(c)}; color: white; border-radius: 8px; padding: 6px 12px; " +
-        "min-width: 220px; box-shadow: 0 1px 3px rgba(0,0,0,.25); font-size: .85rem;";
+        "min-width: 220px; box-shadow: 0 1px 3px rgba(0,0,0,.25); font-size: .85rem; cursor: pointer;";
 
     private static string Pastilla(string color) =>
         $"background: {color}; color: white;";
