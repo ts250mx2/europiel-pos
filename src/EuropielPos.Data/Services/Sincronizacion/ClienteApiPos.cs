@@ -15,6 +15,10 @@ public class SincronizacionSettings
 
     public string ApiKey { get; set; } = string.Empty;
 
+    /// <summary>ApiKey del servicio EuroAsistente (mensajería); estaba
+    /// hardcodeada en modGeneral.vb.</summary>
+    public string ApiKeyEuroAsistente { get; set; } = string.Empty;
+
     /// <summary>Timeout por petición; el original usaba 20 segundos.</summary>
     public int TimeoutSegundos { get; set; } = 20;
 }
@@ -33,6 +37,10 @@ public interface IClienteApiPos
 
     /// <summary>POST que devuelve el cuerpo crudo de la respuesta.</summary>
     Task<string> PostCrudoAsync(string servicio, string cuerpoJson = "", IReadOnlyDictionary<string, string>? headersExtra = null, int? timeoutSegundos = null, CancellationToken ct = default);
+
+    /// <summary>GET crudo (lo usa GetPendingMessages de EuroAsistente, que
+    /// viaja con su propia ApiKey).</summary>
+    Task<string> GetCrudoAsync(string servicioConQuery, bool usarApiKeyEuroAsistente = false, int? timeoutSegundos = null, CancellationToken ct = default);
 
     /// <summary>Port de <c>CheckForInternetConnection</c>: ¿responde el API?</summary>
     Task<bool> HayConexionAsync(CancellationToken ct = default);
@@ -90,6 +98,20 @@ public class ClienteApiPos : IClienteApiPos
         respuesta.EnsureSuccessStatusCode();
 
         return await respuesta.Content.ReadAsStringAsync(ct);
+    }
+
+    public async Task<string> GetCrudoAsync(string servicioConQuery, bool usarApiKeyEuroAsistente = false, int? timeoutSegundos = null, CancellationToken ct = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(timeoutSegundos ?? _settings.TimeoutSegundos));
+
+        using var peticion = new HttpRequestMessage(HttpMethod.Get, _settings.UrlApi + servicioConQuery);
+        peticion.Headers.Add("ApiKey", usarApiKeyEuroAsistente ? _settings.ApiKeyEuroAsistente : _settings.ApiKey);
+
+        using var respuesta = await _http.SendAsync(peticion, cts.Token);
+        respuesta.EnsureSuccessStatusCode();
+
+        return await respuesta.Content.ReadAsStringAsync(cts.Token);
     }
 
     public async Task<bool> HayConexionAsync(CancellationToken ct = default)
