@@ -7,6 +7,7 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
+<div style="min-height: 100vh; background: #F2F6F7;">
 <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-8">
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-6">
         <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/"))" />
@@ -69,6 +70,7 @@
         }
     </MudPaper>
 </MudContainer>
+</div>
 
 @code {
     private readonly List<SucursalBloqueApi> _sucursales = [];
@@ -161,3 +163,4 @@
         }
     }
 }
+

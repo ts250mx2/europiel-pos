@@ -2,9 +2,9 @@
 @inject EuropielPos.Domain.Sesion.SesionPos Sesion
 @inject NavigationManager Nav
 
-<MudLayout>
-    @if (Sesion.Autenticado)
-    {
+@if (Sesion.Autenticado)
+{
+    <MudLayout>
         <MudAppBar Elevation="2">
             @* Mini logotipo de marca en la barra *@
             <div style="display: flex; gap: 4px; margin-right: 10px;">
@@ -24,11 +24,17 @@
             <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit"
                            Title="Cerrar sesión" OnClick="CerrarSesion" />
         </MudAppBar>
-    }
-    <MudMainContent>
-        @Body
-    </MudMainContent>
-</MudLayout>
+        <MudMainContent>
+            @Body
+        </MudMainContent>
+    </MudLayout>
+}
+else
+{
+    @* Sin sesión (login/configuración) no hay AppBar: la página ocupa todo,
+       sin el padding superior que MudMainContent reserva para la barra. *@
+    @Body
+}
 
 @code {
     private void CerrarSesion()
