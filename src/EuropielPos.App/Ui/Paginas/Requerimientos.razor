@@ -1,6 +1,6 @@
 @page "/requerimientos"
 @using System.Data
-@inject EuropielPos.Data.Services.IRequerimientoService Requerimientos
+@inject EuropielPos.Data.Services.IRequerimientoService ReqServicio
 @inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
 @inject EuropielPos.Domain.Sesion.SesionPos Sesion
 @inject NavigationManager Nav
@@ -154,7 +154,7 @@ else
         try
         {
             // Convenciones de frmRequerimientosOP: es_monitor=0, tipo "O".
-            DataTable dt = await Requerimientos.RecuperaRequerimientosAsync(
+            DataTable dt = await ReqServicio.RecuperaRequerimientosAsync(
                 Sesion.IdUsuario, Contexto.Bloque, esMonitor: 0, tipo: "O");
 
             _lista = dt.Rows.Cast<DataRow>().Select(r => new Renglon(
@@ -180,7 +180,7 @@ else
     {
         try
         {
-            DataTable dt = await Requerimientos.RecuperaTipoFallaAsync("--- Seleccione ---", "O");
+            DataTable dt = await ReqServicio.RecuperaTipoFallaAsync("--- Seleccione ---", "O");
 
             // El SP devuelve (valor, texto) para el combo; primera fila es el placeholder.
             _tiposFalla = dt.Rows.Cast<DataRow>()
@@ -216,7 +216,7 @@ else
                 : DateTime.Now;
 
             // Convenciones del original: prioridad 0, monto 0, dirigido vacío, tipo "O".
-            int id = await Requerimientos.GuardaRequerimientoAsync(
+            int id = await ReqServicio.GuardaRequerimientoAsync(
                 idPrioridad: "0", fechaVencimiento: vencimiento, concepto: _concepto.Trim(), monto: 0,
                 dirigido: string.Empty, idUsuario: Sesion.IdUsuario, bloqueAlta: Contexto.Bloque,
                 tipo: "O", idTipoFalla: _tipoFallaSeleccionado);
@@ -255,7 +255,7 @@ else
 
         try
         {
-            string resultado = await Requerimientos.TerminaRequerimientoAsync(r.IdLocal, Sesion.IdUsuario, Contexto.Bloque);
+            string resultado = await ReqServicio.TerminaRequerimientoAsync(r.IdLocal, Sesion.IdUsuario, Contexto.Bloque);
             Snackbar.Add(resultado == "Ok" ? "Requerimiento terminado." : resultado,
                 resultado == "Ok" ? Severity.Success : Severity.Warning);
             await Cargar();
@@ -276,7 +276,7 @@ else
 
         try
         {
-            string resultado = await Requerimientos.BorrarRequerimientoAsync(r.IdLocal, Sesion.IdUsuario, Contexto.Bloque);
+            string resultado = await ReqServicio.BorrarRequerimientoAsync(r.IdLocal, Sesion.IdUsuario, Contexto.Bloque);
             Snackbar.Add(resultado == "Ok" ? "Requerimiento borrado." : resultado,
                 resultado == "Ok" ? Severity.Success : Severity.Warning);
             await Cargar();

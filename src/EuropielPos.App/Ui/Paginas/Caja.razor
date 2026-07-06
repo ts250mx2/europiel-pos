@@ -1,5 +1,6 @@
 @page "/caja"
 @inject EuropielPos.Data.Services.ICajaService CajaServicio
+@inject EuropielPos.Data.Services.Impresion.IReciboTicketService Recibos
 @inject EuropielPos.Data.Services.IPacienteService Pacientes
 @inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
 @inject EuropielPos.Domain.Sesion.SesionPos Sesion
@@ -206,11 +207,40 @@ else
                             Pago registrado · Folio <b>@_ultimoCobro.Folio</b> · @_ultimoCobro.Total.ToString("C2")
                             <br /><small>Se enviará al servidor en la próxima sincronización.</small>
                         </MudAlert>
+                        <MudStack Row="true" Spacing="2" Class="mt-3">
+                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Print" Disabled="_imprimiendo"
+                                       OnClick="ImprimirRecibo">
+                                @(_imprimiendo ? "Imprimiendo..." : "Imprimir recibo")
+                            </MudButton>
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Secondary"
+                                           Title="Ver ticket" OnClick="VerTicket" />
+                        </MudStack>
                     }
                 </MudPaper>
             </MudItem>
         </MudGrid>
     </MudContainer>
+
+    @* ---------- Vista previa del ticket ---------- *@
+    <MudDialog @bind-Visible="_ticketAbierto" Options="_opcionesTicket">
+        <TitleContent>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" />
+                <MudText Typo="Typo.h6">Recibo</MudText>
+            </MudStack>
+        </TitleContent>
+        <DialogContent>
+            <MudPaper Elevation="0" Class="pa-4" Style="background:#FFFDF5; border: 1px dashed #C9CDD0;">
+                <pre style="font-family: 'Consolas', monospace; font-size: .8rem; margin: 0; white-space: pre;">@_ticketTexto</pre>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton StartIcon="@Icons.Material.Filled.Print" Color="Color.Primary" Variant="Variant.Filled"
+                       Disabled="_imprimiendo" OnClick="ImprimirRecibo">Imprimir</MudButton>
+            <MudButton OnClick="@(() => _ticketAbierto = false)">Cerrar</MudButton>
+        </DialogActions>
+    </MudDialog>
 }
 
 @code {
@@ -241,6 +271,51 @@ else
     private int _idBanco;
     private bool _cobrando;
     private EuropielPos.Data.Services.ResultadoCobro? _ultimoCobro;
+    private bool _imprimiendo;
+    private bool _ticketAbierto;
+    private string _ticketTexto = string.Empty;
+    private readonly DialogOptions _opcionesTicket = new() { MaxWidth = MaxWidth.ExtraSmall, CloseButton = true };
+
+    private async Task VerTicket()
+    {
+        if (_ultimoCobro is null)
+            return;
+
+        try
+        {
+            _ticketTexto = await Recibos.GeneraReciboAsync(_ultimoCobro.IdPago, Sesion.UsuarioNombre);
+            _ticketAbierto = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ImprimirRecibo()
+    {
+        if (_ultimoCobro is null)
+            return;
+
+        _imprimiendo = true;
+        try
+        {
+            string? problema = await Recibos.ImprimeReciboAsync(_ultimoCobro.IdPago, Sesion.UsuarioNombre);
+
+            if (problema is null)
+                Snackbar.Add("Recibo impreso.", Severity.Success);
+            else
+                Snackbar.Add(problema, Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _imprimiendo = false;
+        }
+    }
 
     private readonly List<FormaPago> _formasPago =
     [
