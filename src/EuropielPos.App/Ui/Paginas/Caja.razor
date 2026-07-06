@@ -1,0 +1,421 @@
+@page "/caja"
+@inject EuropielPos.Data.Services.ICajaService CajaServicio
+@inject EuropielPos.Data.Services.IPacienteService Pacientes
+@inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
+@inject EuropielPos.Domain.Sesion.SesionPos Sesion
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@if (!Sesion.Autenticado)
+{
+    <MudAlert Severity="Severity.Warning" Class="ma-8">
+        Sesión no iniciada. <MudLink Href="/">Ir al login</MudLink>
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/inicio"))" />
+            <MudText Typo="Typo.h5"><b>Caja</b></MudText>
+        </MudStack>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="8">
+
+                @* ---------- 1. Cliente ---------- *@
+                <MudPaper Elevation="2" Class="pa-5 rounded-xl mb-3">
+                    <MudText Typo="Typo.h6" Class="mb-3">1 · Cliente</MudText>
+                    <MudAutocomplete T="EuropielPos.Data.Entities.Paciente" Value="_cliente" ValueChanged="SeleccionaCliente"
+                                     SearchFunc="BuscarPacientes" MinCharacters="3" DebounceInterval="400"
+                                     Label="Buscar cliente" Variant="Variant.Outlined"
+                                     AdornmentIcon="@Icons.Material.Filled.PersonSearch" Adornment="Adornment.Start"
+                                     ToStringFunc="@(p => p is null ? string.Empty : $"{p.Nombre} {p.ApPaterno} {p.ApMaterno}".Trim())"
+                                     ResetValueOnEmptyText="true" Clearable="true" />
+                </MudPaper>
+
+                @* ---------- 2. Concepto ---------- *@
+                <MudPaper Elevation="2" Class="pa-5 rounded-xl mb-3">
+                    <MudText Typo="Typo.h6" Class="mb-3">2 · ¿Qué se cobra?</MudText>
+
+                    <MudStack Row="true" Spacing="2" Class="mb-4">
+                        <MudButton Variant="@(_modo == ModoCobro.Paquete ? Variant.Filled : Variant.Outlined)"
+                                   Color="Color.Primary" StartIcon="@Icons.Material.Filled.Inventory2"
+                                   Style="height:56px;" OnClick="@(() => _modo = ModoCobro.Paquete)">
+                            Abono a paquete
+                        </MudButton>
+                        <MudButton Variant="@(_modo == ModoCobro.Servicio ? Variant.Filled : Variant.Outlined)"
+                                   Color="Color.Primary" StartIcon="@Icons.Material.Filled.Spa"
+                                   Style="height:56px;" OnClick="@(() => _modo = ModoCobro.Servicio)">
+                            Servicio / anticipo
+                        </MudButton>
+                    </MudStack>
+
+                    @if (_modo == ModoCobro.Paquete)
+                    {
+                        @if (_cliente is null)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Selecciona primero un cliente.</MudText>
+                        }
+                        else if (_paquetes.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">El cliente no tiene paquetes con saldo.</MudText>
+                        }
+                        else
+                        {
+                            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                                @foreach (var p in _paquetes)
+                                {
+                                    <MudButton Variant="@(_paqueteSeleccionado == p ? Variant.Filled : Variant.Outlined)"
+                                               Color="@(p.SaldoVencido > 0 ? Color.Warning : Color.Primary)"
+                                               Style="height:72px; min-width:200px; text-transform:none;"
+                                               OnClick="@(() => SeleccionaPaquete(p))">
+                                        <MudStack Spacing="0" AlignItems="AlignItems.Start">
+                                            <MudText Typo="Typo.subtitle2">
+                                                @(p.IdPaquete is > 0 ? $"Paquete #{p.IdPaquete}" : $"Paquete local {p.IdLocal}")
+                                            </MudText>
+                                            <MudText Typo="Typo.caption">Saldo: @p.SaldoTotal.ToString("C2")</MudText>
+                                            @if (p.SaldoVencido > 0)
+                                            {
+                                                <MudText Typo="Typo.caption"><b>Vencido: @p.SaldoVencido.ToString("C2")</b></MudText>
+                                            }
+                                        </MudStack>
+                                    </MudButton>
+                                }
+                            </MudStack>
+                        }
+                    }
+                    else
+                    {
+                        @* Tipos de servicio: botones con icono en vez de option buttons *@
+                        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+                            @foreach (var t in _tiposServicio)
+                            {
+                                <MudButton Variant="@(_tipoSeleccionado?.IdTipoServicio == t.IdTipoServicio ? Variant.Filled : Variant.Outlined)"
+                                           Color="Color.Primary" StartIcon="@IconoTipo(t.Descripcion)"
+                                           Style="height:52px; text-transform:none;"
+                                           OnClick="@(() => SeleccionaTipo(t))">
+                                    @t.Descripcion
+                                </MudButton>
+                            }
+                        </MudStack>
+
+                        @* Servicios del tipo: cuadrícula de botones en vez de drilldown *@
+                        @if (_tipoSeleccionado is not null)
+                        {
+                            @if (_servicios.Count == 0)
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Sin servicios de este tipo con venta permitida.</MudText>
+                            }
+                            else
+                            {
+                                <MudGrid Spacing="2">
+                                    @foreach (var s in _servicios)
+                                    {
+                                        <MudItem xs="6" sm="4" md="3">
+                                            <MudButton Variant="@(_servicioSeleccionado?.IdServicio == s.IdServicio ? Variant.Filled : Variant.Outlined)"
+                                                       Color="Color.Secondary" FullWidth="true"
+                                                       Style="height:68px; text-transform:none;"
+                                                       OnClick="@(() => SeleccionaServicio(s))">
+                                                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                                    <MudText Typo="Typo.body2" Align="Align.Center">@s.Descripcion</MudText>
+                                                    <MudText Typo="Typo.caption"><b>@((s.Precio ?? 0).ToString("C2"))</b></MudText>
+                                                </MudStack>
+                                            </MudButton>
+                                        </MudItem>
+                                    }
+                                </MudGrid>
+                            }
+                        }
+                    }
+                </MudPaper>
+
+                @* ---------- 3. Formas de pago ---------- *@
+                <MudPaper Elevation="2" Class="pa-5 rounded-xl">
+                    <MudText Typo="Typo.h6" Class="mb-3">3 · Forma de pago</MudText>
+
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
+                        @foreach (var fp in _formasPago)
+                        {
+                            <MudButton Variant="@(fp.Activa ? Variant.Filled : Variant.Outlined)"
+                                       Color="@fp.Color" StartIcon="@fp.Icono"
+                                       Style="height:64px; min-width:170px; text-transform:none; font-size:1rem;"
+                                       OnClick="@(() => AlternaFormaPago(fp))">
+                                @fp.Nombre
+                            </MudButton>
+                        }
+                    </MudStack>
+
+                    <MudGrid Spacing="2">
+                        @foreach (var fp in _formasPago.Where(f => f.Activa))
+                        {
+                            <MudItem xs="6" sm="3">
+                                <MudNumericField T="decimal" Value="fp.Monto" ValueChanged="@(v => CambiaMonto(fp, v))"
+                                                 Label="@fp.Nombre" Variant="Variant.Outlined" Min="0" Format="N2"
+                                                 Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.AttachMoney" />
+                            </MudItem>
+                        }
+                    </MudGrid>
+
+                    @if (_formasPago.Any(f => f.Activa && f.RequiereBanco))
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Banco / terminal</MudText>
+                        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                            @foreach (var b in _bancos)
+                            {
+                                <MudButton Variant="@(_idBanco == b.IdBanco ? Variant.Filled : Variant.Outlined)"
+                                           Color="Color.Dark" StartIcon="@Icons.Material.Filled.AccountBalance"
+                                           Size="Size.Small" Style="text-transform:none;"
+                                           OnClick="@(() => _idBanco = b.IdBanco)">
+                                    @b.Descripcion
+                                </MudButton>
+                            }
+                        </MudStack>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            @* ---------- Resumen / total ---------- *@
+            <MudItem xs="12" md="4">
+                <MudPaper Elevation="4" Class="pa-6 rounded-xl" Style="position: sticky; top: 80px;">
+                    <MudText Typo="Typo.h6" Class="mb-3">Resumen</MudText>
+
+                    <MudStack Spacing="1" Class="mb-4">
+                        <MudText Typo="Typo.body2"><b>Cliente:</b> @(_cliente is null ? "—" : $"{_cliente.Nombre} {_cliente.ApPaterno}")</MudText>
+                        <MudText Typo="Typo.body2"><b>Concepto:</b> @DescripcionConcepto()</MudText>
+                        @foreach (var fp in _formasPago.Where(f => f.Activa && f.Monto > 0))
+                        {
+                            <MudText Typo="Typo.body2">@fp.Nombre: @fp.Monto.ToString("C2")</MudText>
+                        }
+                    </MudStack>
+
+                    <MudDivider Class="mb-3" />
+                    <MudText Typo="Typo.h4" Color="Color.Primary" Align="Align.Center" Class="mb-4">
+                        @Total().ToString("C2")
+                    </MudText>
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.PointOfSale" Style="height:60px; font-size:1.1rem;"
+                               Disabled="@(!PuedeCobrar() || _cobrando)" OnClick="Cobrar">
+                        @(_cobrando ? "Cobrando..." : "COBRAR")
+                    </MudButton>
+
+                    @if (_ultimoCobro is not null)
+                    {
+                        <MudAlert Severity="Severity.Success" Class="mt-4">
+                            Pago registrado · Folio <b>@_ultimoCobro.Folio</b> · @_ultimoCobro.Total.ToString("C2")
+                            <br /><small>Se enviará al servidor en la próxima sincronización.</small>
+                        </MudAlert>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+}
+
+@code {
+    private enum ModoCobro { Paquete, Servicio }
+
+    private class FormaPago
+    {
+        public required string Nombre { get; init; }
+        public required string Icono { get; init; }
+        public Color Color { get; init; } = Color.Primary;
+        public bool RequiereBanco { get; init; }
+        public bool Activa { get; set; }
+        public decimal Monto { get; set; }
+    }
+
+    private EuropielPos.Data.Entities.Paciente? _cliente;
+    private ModoCobro _modo = ModoCobro.Paquete;
+
+    private List<EuropielPos.Data.Services.PaqueteCobrable> _paquetes = [];
+    private EuropielPos.Data.Services.PaqueteCobrable? _paqueteSeleccionado;
+
+    private List<EuropielPos.Data.Entities.TipoServicio> _tiposServicio = [];
+    private EuropielPos.Data.Entities.TipoServicio? _tipoSeleccionado;
+    private List<EuropielPos.Data.Entities.Servicio> _servicios = [];
+    private EuropielPos.Data.Entities.Servicio? _servicioSeleccionado;
+
+    private List<EuropielPos.Data.Entities.Bancos> _bancos = [];
+    private int _idBanco;
+    private bool _cobrando;
+    private EuropielPos.Data.Services.ResultadoCobro? _ultimoCobro;
+
+    private readonly List<FormaPago> _formasPago =
+    [
+        new() { Nombre = "Efectivo", Icono = Icons.Material.Filled.Payments, Color = Color.Success },
+        new() { Nombre = "T. Crédito", Icono = Icons.Material.Filled.CreditCard, RequiereBanco = true },
+        new() { Nombre = "T. Débito", Icono = Icons.Material.Filled.CreditScore, RequiereBanco = true },
+        new() { Nombre = "Transferencia", Icono = Icons.Material.Filled.AccountBalance, Color = Color.Info },
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _tiposServicio = await CajaServicio.TiposServicioAsync();
+            _bancos = await CajaServicio.BancosAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar catálogos: " + ex.Message, Severity.Error);
+        }
+    }
+
+    // Iconos según la descripción del tipo de servicio.
+    private static string IconoTipo(string? descripcion)
+    {
+        string d = (descripcion ?? string.Empty).ToUpperInvariant();
+        return d switch
+        {
+            _ when d.Contains("LASER") || d.Contains("LÁSER") => Icons.Material.Filled.FlashOn,
+            _ when d.Contains("FACIAL") => Icons.Material.Filled.Face,
+            _ when d.Contains("CORPORAL") => Icons.Material.Filled.Accessibility,
+            _ when d.Contains("MICRO") => Icons.Material.Filled.AutoAwesome,
+            _ when d.Contains("DEPIL") => Icons.Material.Filled.ContentCut,
+            _ when d.Contains("PLUS") => Icons.Material.Filled.Star,
+            _ when d.Contains("PROMO") => Icons.Material.Filled.LocalOffer,
+            _ => Icons.Material.Filled.Spa,
+        };
+    }
+
+    private async Task<IEnumerable<EuropielPos.Data.Entities.Paciente>> BuscarPacientes(string texto, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(texto) || texto.Length < 3)
+            return [];
+
+        try
+        {
+            return await Pacientes.BuscaPacienteAsync(texto.Trim(), Contexto.IdSucursal,
+                Sesion.IdSucursalAgendaExterna ?? 0, ct);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al buscar: " + ex.Message, Severity.Error);
+            return [];
+        }
+    }
+
+    private async Task SeleccionaCliente(EuropielPos.Data.Entities.Paciente? p)
+    {
+        _cliente = p;
+        _paquetes = [];
+        _paqueteSeleccionado = null;
+        _ultimoCobro = null;
+
+        if (p is not null)
+        {
+            try
+            {
+                _paquetes = await CajaServicio.PaquetesConSaldoAsync(p.IdLocal);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private void SeleccionaPaquete(EuropielPos.Data.Services.PaqueteCobrable p)
+    {
+        _paqueteSeleccionado = p;
+
+        // Propuesta de cobro: el saldo vencido si hay, si no el saldo total.
+        var efectivo = _formasPago[0];
+        if (!_formasPago.Any(f => f.Activa))
+            efectivo.Activa = true;
+
+        var activa = _formasPago.First(f => f.Activa);
+        activa.Monto = p.SaldoVencido > 0 ? p.SaldoVencido : p.SaldoTotal;
+    }
+
+    private async Task SeleccionaTipo(EuropielPos.Data.Entities.TipoServicio t)
+    {
+        _tipoSeleccionado = t;
+        _servicioSeleccionado = null;
+        _servicios = await CajaServicio.ServiciosPorTipoAsync(t.IdTipoServicio);
+    }
+
+    private void SeleccionaServicio(EuropielPos.Data.Entities.Servicio s)
+    {
+        _servicioSeleccionado = s;
+
+        var efectivo = _formasPago[0];
+        if (!_formasPago.Any(f => f.Activa))
+            efectivo.Activa = true;
+
+        var activa = _formasPago.First(f => f.Activa);
+        activa.Monto = s.Precio ?? 0;
+    }
+
+    private void AlternaFormaPago(FormaPago fp)
+    {
+        fp.Activa = !fp.Activa;
+        if (!fp.Activa)
+            fp.Monto = 0;
+    }
+
+    private void CambiaMonto(FormaPago fp, decimal valor) => fp.Monto = valor;
+
+    private decimal Total() => _formasPago.Where(f => f.Activa).Sum(f => f.Monto);
+
+    private string DescripcionConcepto() => _modo switch
+    {
+        ModoCobro.Paquete when _paqueteSeleccionado is not null =>
+            _paqueteSeleccionado.IdPaquete is > 0 ? $"Abono a paquete #{_paqueteSeleccionado.IdPaquete}" : "Abono a paquete local",
+        ModoCobro.Servicio when _servicioSeleccionado is not null => _servicioSeleccionado.Descripcion ?? "Servicio",
+        _ => "—",
+    };
+
+    private bool PuedeCobrar() =>
+        _cliente is not null
+        && Total() > 0
+        && (_modo == ModoCobro.Paquete ? _paqueteSeleccionado is not null : _servicioSeleccionado is not null)
+        && (!_formasPago.Any(f => f.Activa && f.RequiereBanco && f.Monto > 0) || _idBanco > 0);
+
+    private async Task Cobrar()
+    {
+        if (_cliente is null)
+            return;
+
+        _cobrando = true;
+        try
+        {
+            var cobro = new EuropielPos.Data.Services.CobroCaja
+            {
+                IdPacienteLocal = _cliente.IdLocal,
+                IdPaciente = _cliente.IdPaciente ?? 0,
+                NombreCliente = $"{_cliente.Nombre} {_cliente.ApPaterno} {_cliente.ApMaterno}".Trim(),
+                Efectivo = _formasPago[0].Activa ? _formasPago[0].Monto : 0,
+                TarjetaCredito = _formasPago[1].Activa ? _formasPago[1].Monto : 0,
+                TarjetaDebito = _formasPago[2].Activa ? _formasPago[2].Monto : 0,
+                Transferencia = _formasPago[3].Activa ? _formasPago[3].Monto : 0,
+                IdBanco = _idBanco,
+                IdProducto = _modo == ModoCobro.Paquete ? 18 : _servicioSeleccionado!.IdServicio,
+                IdPaquete = _modo == ModoCobro.Paquete ? _paqueteSeleccionado!.IdPaquete ?? 0 : 0,
+                EsAnticipo = _modo == ModoCobro.Servicio,
+            };
+
+            _ultimoCobro = await CajaServicio.CobrarAsync(cobro, Sesion.IdUsuario);
+
+            Snackbar.Add($"Pago registrado · Folio {_ultimoCobro.Folio}", Severity.Success);
+
+            // Limpia para el siguiente cobro (conserva cliente).
+            foreach (var fp in _formasPago) { fp.Activa = false; fp.Monto = 0; }
+            _paqueteSeleccionado = null;
+            _servicioSeleccionado = null;
+            _idBanco = 0;
+            if (_cliente is not null)
+                _paquetes = await CajaServicio.PaquetesConSaldoAsync(_cliente.IdLocal);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _cobrando = false;
+        }
+    }
+}
