@@ -1,0 +1,247 @@
+@page "/agenda/nueva"
+@inject EuropielPos.Data.Services.INuevaCitaService NuevaCitaServicio
+@inject EuropielPos.Data.Services.IPacienteService Pacientes
+@inject EuropielPos.Data.Services.Sincronizacion.ISincronizacionOrquestador Orquestador
+@inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
+@inject EuropielPos.Domain.Sesion.SesionPos Sesion
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@if (!Sesion.Autenticado)
+{
+    <MudAlert Severity="Severity.Warning" Class="ma-8">
+        Sesión no iniciada. <MudLink Href="/">Ir al login</MudLink>
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/agenda"))" />
+            <MudText Typo="Typo.h5"><b>Nueva cita</b></MudText>
+        </MudStack>
+
+        @* ---------- 1. Paciente ---------- *@
+        <MudPaper Elevation="2" Class="pa-6 rounded-xl mb-4">
+            <MudText Typo="Typo.h6" Class="mb-3">1 · Paciente</MudText>
+
+            <MudAutocomplete T="EuropielPos.Data.Entities.Paciente" @bind-Value="_paciente"
+                             SearchFunc="BuscarPacientes" MinCharacters="3" DebounceInterval="400"
+                             Label="Buscar por nombre" Variant="Variant.Outlined"
+                             AdornmentIcon="@Icons.Material.Filled.PersonSearch" Adornment="Adornment.Start"
+                             ToStringFunc="@(p => p is null ? string.Empty : $"{p.Nombre} {p.ApPaterno} {p.ApMaterno}".Trim())"
+                             ResetValueOnEmptyText="true" Clearable="true" />
+
+            @if (_config?.PacienteBloqueado == true)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">
+                    Cliente bloqueado para agendar citas.
+                </MudAlert>
+            }
+            @if (_paciente is not null && _config?.ClienteTiene1erCita == false)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                    Primera cita del cliente: se agrega tiempo adicional automáticamente.
+                </MudAlert>
+            }
+        </MudPaper>
+
+        @* ---------- 2. Áreas ---------- *@
+        <MudPaper Elevation="2" Class="pa-6 rounded-xl mb-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudText Typo="Typo.h6">2 · Áreas por agendar</MudText>
+                <MudSpacer />
+                @if (_areas.Count > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
+                        @_areas.Count(a => a.Seleccionada) de @_areas.Count seleccionadas
+                    </MudChip>
+                }
+            </MudStack>
+
+            @if (_paciente is null)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Selecciona primero un paciente.</MudText>
+            }
+            else if (_areas.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    El paciente no tiene áreas pendientes de agendar.
+                </MudText>
+            }
+            else
+            {
+                @foreach (var grupoPaquete in _areas.GroupBy(a => a.NoPaquete))
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mt-2 mb-1">Paquete @grupoPaquete.Key</MudText>
+                    <MudStack Spacing="0">
+                        @foreach (var area in grupoPaquete)
+                        {
+                            <MudCheckBox T="bool" Value="@area.Seleccionada"
+                                         ValueChanged="@(v => CambiaSeleccion(area, v))"
+                                         Color="Color.Primary" Dense="true"
+                                         Disabled="@(_config?.PacienteBloqueado == true)">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <span>@area.Descripcion</span>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@($"{area.Duracion:0} min")</MudChip>
+                                    @if (area.IdPaquete is null)
+                                    {
+                                        <MudTooltip Text="El paquete aún no se sincroniza; la cita se enviará después">
+                                            <MudIcon Icon="@Icons.Material.Filled.CloudOff" Style="font-size:1rem;" />
+                                        </MudTooltip>
+                                    }
+                                </MudStack>
+                            </MudCheckBox>
+                        }
+                    </MudStack>
+                }
+            }
+        </MudPaper>
+
+        @* ---------- 3. Fecha y hora ---------- *@
+        <MudPaper Elevation="2" Class="pa-6 rounded-xl mb-4">
+            <MudText Typo="Typo.h6" Class="mb-3">3 · Fecha y hora</MudText>
+            <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudDatePicker Date="_fecha" DateChanged="@(f => { _fecha = f ?? DateTime.Today; RecalculaDuracion(); })"
+                               Label="Fecha" Variant="Variant.Outlined" MinDate="DateTime.Today"
+                               MaxDate="DateTime.Today.AddDays(60)" Style="max-width: 200px;" />
+                <MudTimePicker Time="_hora" TimeChanged="@(t => { _hora = t ?? DateTime.Now.TimeOfDay; })"
+                               Label="Hora" Variant="Variant.Outlined" Style="max-width: 160px;" />
+                <MudChip T="string" Color="@(_duracion > 0 ? Color.Primary : Color.Default)" Size="Size.Large"
+                         Icon="@Icons.Material.Filled.Timer">
+                    @_duracion minutos
+                </MudChip>
+            </MudStack>
+        </MudPaper>
+
+        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+            <MudButton Variant="Variant.Text" OnClick="@(() => Nav.NavigateTo("/agenda"))">Cancelar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.EventAvailable"
+                       Disabled="@(_guardando || _paciente is null || _duracion == 0 || _config?.PacienteBloqueado == true)"
+                       OnClick="Guardar">
+                @(_guardando ? "Guardando..." : "Agendar cita")
+            </MudButton>
+        </MudStack>
+    </MudContainer>
+}
+
+@code {
+    private EuropielPos.Data.Entities.Paciente? _paciente;
+    private EuropielPos.Data.Services.ConfigAgendado? _config;
+    private List<EuropielPos.Data.Services.AreaAgendable> _areas = [];
+    private DateTime _fecha = DateTime.Today;
+    private TimeSpan _hora = RedondeaHora(DateTime.Now.TimeOfDay);
+    private int _duracion;
+    private bool _guardando;
+    private EuropielPos.Data.Entities.Paciente? _pacienteAnterior;
+
+    protected override async Task OnAfterRenderAsync(bool primeraVez)
+    {
+        // Al cambiar el paciente del autocomplete, cargar sus áreas.
+        if (!Equals(_paciente, _pacienteAnterior))
+        {
+            _pacienteAnterior = _paciente;
+            await CargarAreas();
+            StateHasChanged();
+        }
+    }
+
+    private static TimeSpan RedondeaHora(TimeSpan t) =>
+        new(t.Hours, t.Minutes - (t.Minutes % 5), 0);
+
+    private async Task<IEnumerable<EuropielPos.Data.Entities.Paciente>> BuscarPacientes(string texto, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(texto) || texto.Length < 3)
+            return [];
+
+        try
+        {
+            return await Pacientes.BuscaPacienteAsync(texto.Trim(), Contexto.IdSucursal,
+                Sesion.IdSucursalAgendaExterna ?? 0, ct);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al buscar: " + ex.Message, Severity.Error);
+            return [];
+        }
+    }
+
+    private async Task CargarAreas()
+    {
+        _areas = [];
+        _config = null;
+        _duracion = 0;
+
+        if (_paciente is null)
+            return;
+
+        try
+        {
+            (_config, _areas) = await NuevaCitaServicio.AreasDelPacienteAsync(
+                _paciente.IdLocal, Sesion.IdSucursalAgendaExterna ?? 0);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void CambiaSeleccion(EuropielPos.Data.Services.AreaAgendable area, bool valor)
+    {
+        area.Seleccionada = valor;
+        RecalculaDuracion();
+    }
+
+    private void RecalculaDuracion()
+    {
+        _duracion = _config is null
+            ? 0
+            : NuevaCitaServicio.CalculaDuracion(_areas.Where(a => a.Seleccionada), _config, _fecha);
+    }
+
+    private async Task Guardar()
+    {
+        if (_paciente is null || _config is null)
+            return;
+
+        _guardando = true;
+        try
+        {
+            var fechaInicio = new DateTime(_fecha.Year, _fecha.Month, _fecha.Day, _hora.Hours, _hora.Minutes, 0);
+            var seleccionadas = _areas.Where(a => a.Seleccionada).ToList();
+
+            (int idCita, bool envioOnline) = await NuevaCitaServicio.GuardarCitaAsync(
+                _paciente.IdLocal, fechaInicio, _duracion, seleccionadas, _config,
+                Sesion.IdUsuario, Sesion.IdSucursalAgendaExterna ?? 0);
+
+            // Igual que el original: si todos los paquetes están sincronizados,
+            // la cita se envía en línea de inmediato.
+            if (envioOnline && idCita > 0)
+            {
+                try
+                {
+                    await Orquestador.EnvioCitaOnLineAsync(idCita);
+                }
+                catch (Exception exEnvio)
+                {
+                    Snackbar.Add("Cita registrada, pero el envío en línea falló: " + exEnvio.Message +
+                                 " Se reintentará en la sincronización.", Severity.Warning);
+                    Nav.NavigateTo("/agenda");
+                    return;
+                }
+            }
+
+            Snackbar.Add("Cita registrada", Severity.Success);
+            Nav.NavigateTo("/agenda");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+}

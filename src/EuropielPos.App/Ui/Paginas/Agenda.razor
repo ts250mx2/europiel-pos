@@ -37,6 +37,10 @@ else
                 <MudSpacer />
 
                 <MudChip T="string" Color="Color.Primary" Variant="Variant.Text">@_citas.Count citas</MudChip>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => Nav.NavigateTo("/agenda/nueva"))">
+                    Nueva cita
+                </MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
                            StartIcon="@Icons.Material.Filled.Sync" Disabled="_sincronizando" OnClick="Sincronizar">
                     @(_sincronizando ? "Sincronizando..." : "Sincronizar")

@@ -21,6 +21,12 @@ public class ContextoPos
     public int VersionSistema { get; set; }
 
     public int EsEuroskin { get; set; }
+
+    public int IdPais { get; set; }
+
+    /// <summary>Ventana de desbloqueo de agenda otorgada por un supervisor
+    /// (modGeneral.FechaDesbloqueo del original).</summary>
+    public DateTime? FechaDesbloqueo { get; set; }
 }
 
 /// <summary>Respuesta simple del API: solo <c>Message</c>.</summary>

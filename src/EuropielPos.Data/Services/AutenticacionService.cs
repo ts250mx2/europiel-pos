@@ -58,6 +58,7 @@ public class AutenticacionService : IAutenticacionService
         _contexto.IdBloque = sucursal?.IdBloque ?? 0;
         _contexto.VersionSistema = int.TryParse(parametro.VersionSistema, out int version) ? version : 0;
         _contexto.EsEuroskin = parametro.EsEuroskin ?? 0;
+        _contexto.IdPais = sucursal?.IdPais ?? 0;
 
         // Sesión del usuario.
         _sesion.Autenticado = true;
