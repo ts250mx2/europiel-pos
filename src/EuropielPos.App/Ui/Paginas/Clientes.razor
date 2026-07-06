@@ -1,0 +1,314 @@
+@page "/clientes"
+@inject EuropielPos.Data.Services.IPacienteService Pacientes
+@inject EuropielPos.Data.Services.IClientesService ClientesServicio
+@inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
+@inject EuropielPos.Domain.Sesion.SesionPos Sesion
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@if (!Sesion.Autenticado)
+{
+    <MudAlert Severity="Severity.Warning" Class="ma-8">
+        Sesión no iniciada. <MudLink Href="/">Ir al login</MudLink>
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/inicio"))" />
+            <MudText Typo="Typo.h5"><b>Clientes</b></MudText>
+        </MudStack>
+
+        @* ---------- Búsqueda ---------- *@
+        <MudPaper Elevation="2" Class="pa-4 rounded-xl mb-4">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudTextField T="string" @bind-Value="_texto" Label="Nombre, apellido o teléfono"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              OnKeyDown="@(async e => { if (e.Key == "Enter") await Buscar(); })" Style="max-width: 420px;" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_buscando" OnClick="Buscar">
+                    @(_buscando ? "Buscando..." : "Buscar")
+                </MudButton>
+                @if (_resultados.Count > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
+                        @_resultados.Count resultados
+                    </MudChip>
+                }
+            </MudStack>
+        </MudPaper>
+
+        <MudGrid Spacing="3">
+            @* ---------- Resultados ---------- *@
+            <MudItem xs="12" md="5">
+                <MudPaper Elevation="2" Class="rounded-xl" Style="max-height: 65vh; overflow-y: auto;">
+                    @if (_resultados.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="pa-6 mud-text-secondary">
+                            Busca un cliente para ver su expediente (mínimo 3 letras).
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudList T="EuropielPos.Data.Entities.Paciente" SelectedValue="_seleccionado"
+                                 SelectedValueChanged="Seleccionar">
+                            @foreach (var p in _resultados)
+                            {
+                                <MudListItem Value="@p">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.subtitle2">
+                                            @($"{p.Nombre} {p.ApPaterno} {p.ApMaterno}".Trim())
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @JuntaDatos(p.Telefono1, p.Telefono2, p.Email)
+                                        </MudText>
+                                    </MudStack>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            @* ---------- Expediente ---------- *@
+            <MudItem xs="12" md="7">
+                @if (_seleccionado is null)
+                {
+                    <MudPaper Elevation="1" Class="pa-10 rounded-xl d-flex flex-column align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.FolderShared" Style="font-size: 4rem; opacity:.3;" />
+                        <MudText Typo="Typo.body1" Class="mt-2 mud-text-secondary">Selecciona un cliente</MudText>
+                    </MudPaper>
+                }
+                else
+                {
+                    <MudPaper Elevation="2" Class="pa-6 rounded-xl mb-3">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                            <MudText Typo="Typo.h6">
+                                @($"{_seleccionado.Nombre} {_seleccionado.ApPaterno} {_seleccionado.ApMaterno}".Trim())
+                            </MudText>
+                            @if (_seleccionado.Estatus == "B")
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error">Bloqueado</MudChip>
+                            }
+                            <MudSpacer />
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Edit" OnClick="@(() => _editando = !_editando)">
+                                @(_editando ? "Cerrar edición" : "Editar contacto")
+                            </MudButton>
+                        </MudStack>
+
+                        @if (_editando)
+                        {
+                            <MudGrid Spacing="2" Class="mb-2">
+                                <MudItem xs="4"><MudTextField T="string" @bind-Value="_telefono" Label="Teléfono" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                                <MudItem xs="4"><MudTextField T="string" @bind-Value="_celular" Label="Celular" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                                <MudItem xs="4"><MudTextField T="string" @bind-Value="_correo" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                            </MudGrid>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                       Disabled="_guardandoContacto" OnClick="GuardarContacto">
+                                @(_guardandoContacto ? "Guardando..." : "Guardar contacto")
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                @JuntaDatos(_seleccionado.Telefono1, _seleccionado.Telefono2, _seleccionado.Email)
+                            </MudText>
+                        }
+
+                        @if (_expediente is not null)
+                        {
+                            <MudStack Row="true" Spacing="4" Class="mt-4">
+                                <MudPaper Elevation="0" Class="pa-3 rounded-lg" Style="background:#EAF5F7;">
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Total pagado</MudText>
+                                    <MudText Typo="Typo.h6" Color="Color.Primary">@_expediente.TotalPagado.ToString("C2")</MudText>
+                                </MudPaper>
+                                <MudPaper Elevation="0" Class="pa-3 rounded-lg" Style="background:#FDF2EC;">
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Saldo total</MudText>
+                                    <MudText Typo="Typo.h6" Color="@(_expediente.SaldoTotal > 0 ? Color.Warning : Color.Success)">
+                                        @_expediente.SaldoTotal.ToString("C2")
+                                    </MudText>
+                                </MudPaper>
+                            </MudStack>
+                        }
+                    </MudPaper>
+
+                    @if (_expediente is not null)
+                    {
+                        <MudPaper Elevation="2" Class="pa-4 rounded-xl mb-3">
+                            <MudText Typo="Typo.subtitle1" Class="mb-2"><b>Paquetes (@_expediente.Paquetes.Count)</b></MudText>
+                            @if (_expediente.Paquetes.Count == 0)
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Sin paquetes.</MudText>
+                            }
+                            else
+                            {
+                                <MudSimpleTable Dense="true" Hover="true">
+                                    <thead>
+                                        <tr>
+                                            <th>Paquete</th><th>Compra</th><th style="text-align:right">Costo</th>
+                                            <th style="text-align:right">Saldo</th><th>Áreas pend.</th><th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var p in _expediente.Paquetes)
+                                        {
+                                            <tr>
+                                                <td>@(p.IdPaquete is > 0 ? $"#{p.IdPaquete}" : $"local {p.IdLocal}")
+                                                    @(p.EsReventa ? " · Reventa" : "")</td>
+                                                <td>@p.FechaCompra?.ToString("dd/MM/yyyy")</td>
+                                                <td style="text-align:right">@p.CostoTotal.ToString("C2")</td>
+                                                <td style="text-align:right; color:@(p.SaldoVencido > 0 ? "#C62828" : "inherit")">
+                                                    @p.SaldoTotal.ToString("C2")
+                                                </td>
+                                                <td style="text-align:center">@p.AreasPendientes</td>
+                                                <td>
+                                                    @if (p.PendienteSincronizar)
+                                                    {
+                                                        <MudIcon Icon="@Icons.Material.Filled.CloudOff" Style="font-size:1rem;"
+                                                                 Title="Pendiente de sincronizar" />
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            }
+                        </MudPaper>
+
+                        <MudPaper Elevation="2" Class="pa-4 rounded-xl">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                                <MudText Typo="Typo.subtitle1"><b>Últimas citas</b></MudText>
+                                <MudSpacer />
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.CalendarMonth"
+                                           OnClick="@(() => Nav.NavigateTo("/agenda/nueva"))">
+                                    Agendar cita
+                                </MudButton>
+                            </MudStack>
+                            @if (_expediente.UltimasCitas.Count == 0)
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Sin citas registradas.</MudText>
+                            }
+                            else
+                            {
+                                <MudStack Spacing="1">
+                                    @foreach (var c in _expediente.UltimasCitas)
+                                    {
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                            <MudIcon Icon="@(c.Asistida ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Schedule)"
+                                                     Color="@(c.Asistida ? Color.Success : Color.Default)" Style="font-size:1.1rem;" />
+                                            <MudText Typo="Typo.body2">@c.FechaInicio?.ToString("dd/MM/yyyy HH:mm")</MudText>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@c.ListaServicios</MudText>
+                                        </MudStack>
+                                    }
+                                </MudStack>
+                            }
+                        </MudPaper>
+                    }
+                }
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+}
+
+@code {
+    private string _texto = string.Empty;
+    private bool _buscando;
+    private List<EuropielPos.Data.Entities.Paciente> _resultados = [];
+    private EuropielPos.Data.Entities.Paciente? _seleccionado;
+    private EuropielPos.Data.Services.ExpedienteCliente? _expediente;
+
+    private bool _editando;
+    private bool _guardandoContacto;
+    private string _telefono = string.Empty;
+    private string _celular = string.Empty;
+    private string _correo = string.Empty;
+
+    private async Task Buscar()
+    {
+        if (_texto.Trim().Length < 3)
+        {
+            Snackbar.Add("Escribe al menos 3 letras.", Severity.Info);
+            return;
+        }
+
+        _buscando = true;
+        _seleccionado = null;
+        _expediente = null;
+        try
+        {
+            _resultados = await Pacientes.BuscaPacienteAsync(_texto.Trim(), Contexto.IdSucursal,
+                Sesion.IdSucursalAgendaExterna ?? 0);
+
+            if (_resultados.Count == 0)
+                Snackbar.Add("Sin resultados.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al buscar: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _buscando = false;
+        }
+    }
+
+    private async Task Seleccionar(EuropielPos.Data.Entities.Paciente? p)
+    {
+        _seleccionado = p;
+        _expediente = null;
+        _editando = false;
+
+        if (p is null)
+            return;
+
+        _telefono = p.Telefono1 ?? string.Empty;
+        _celular = p.Telefono2 ?? string.Empty;
+        _correo = p.Email ?? string.Empty;
+
+        try
+        {
+            _expediente = await ClientesServicio.ExpedienteAsync(p.IdLocal);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar el expediente: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task GuardarContacto()
+    {
+        if (_seleccionado is null)
+            return;
+
+        _guardandoContacto = true;
+        try
+        {
+            // SP del original: actualiza_datos_cliente.
+            await Pacientes.ActualizaDatosPacienteAsync(_seleccionado.IdLocal, _telefono.Trim(), _celular.Trim(), _correo.Trim());
+
+            _seleccionado.Telefono1 = _telefono.Trim();
+            _seleccionado.Telefono2 = _celular.Trim();
+            _seleccionado.Email = _correo.Trim();
+            _editando = false;
+
+            Snackbar.Add("Datos de contacto actualizados.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al guardar: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _guardandoContacto = false;
+        }
+    }
+
+    private static string JuntaDatos(params string?[] datos)
+    {
+        var partes = datos.Where(d => !string.IsNullOrWhiteSpace(d)).ToList();
+        return partes.Count == 0 ? "Sin datos de contacto" : string.Join(" · ", partes);
+    }
+}

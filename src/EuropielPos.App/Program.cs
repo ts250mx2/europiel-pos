@@ -62,6 +62,7 @@ static class Program
         builder.Services.AddScoped<IAutenticacionService, AutenticacionService>();
         builder.Services.AddScoped<IAgendaService, AgendaService>();
         builder.Services.AddScoped<INuevaCitaService, NuevaCitaService>();
+        builder.Services.AddScoped<IClientesService, ClientesService>();
 
         // Motor de sincronización con el servidor central
         builder.Services.AddSingleton<EuropielPos.Domain.Sincronizacion.ContextoPos>();
