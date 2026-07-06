@@ -1,0 +1,292 @@
+@page "/requerimientos"
+@using System.Data
+@inject EuropielPos.Data.Services.IRequerimientoService Requerimientos
+@inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
+@inject EuropielPos.Domain.Sesion.SesionPos Sesion
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogos
+
+@if (!Sesion.Autenticado)
+{
+    <MudAlert Severity="Severity.Warning" Class="ma-8">
+        Sesión no iniciada. <MudLink Href="/">Ir al login</MudLink>
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/inicio"))" />
+            <MudText Typo="Typo.h5"><b>Requerimientos de operación</b></MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => _altaAbierta = true)">
+                Nuevo requerimiento
+            </MudButton>
+        </MudStack>
+
+        @if (_cargando)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_lista.Count == 0)
+        {
+            <MudPaper Elevation="1" Class="pa-12 rounded-xl d-flex flex-column align-center">
+                <MudIcon Icon="@Icons.Material.Filled.TaskAlt" Style="font-size: 4rem; opacity:.3;" />
+                <MudText Typo="Typo.h6" Class="mt-3 mud-text-secondary">Sin requerimientos pendientes</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudPaper Elevation="2" Class="rounded-xl" Style="overflow:hidden;">
+                <MudSimpleTable Hover="true" Dense="true">
+                    <thead>
+                        <tr>
+                            <th>Folio</th><th>Estatus</th><th>Fecha venc.</th>
+                            <th>Tiempo rest.</th><th>Tipo</th><th>Concepto</th><th style="width:120px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _lista)
+                        {
+                            <tr>
+                                <td><b>@r.Folio</b></td>
+                                <td>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(r.Estatus == "Vencido" ? Color.Error : Color.Primary)"
+                                             Variant="Variant.Text">
+                                        @r.Estatus
+                                    </MudChip>
+                                </td>
+                                <td>@r.FechaVencimiento</td>
+                                <td>@r.TiempoRestante</td>
+                                <td>@r.Tipo</td>
+                                <td>@r.Concepto</td>
+                                <td>
+                                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"
+                                                   Size="Size.Small" Title="Terminar"
+                                                   OnClick="@(() => Terminar(r))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                                   Size="Size.Small" Title="Borrar"
+                                                   OnClick="@(() => Borrar(r))" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        }
+    </MudContainer>
+
+    @* ---------- Dialog de alta ---------- *@
+    <MudDialog @bind-Visible="_altaAbierta" Options="_opcionesDialog">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Nuevo requerimiento</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Tipo de falla</MudText>
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
+                @foreach (var t in _tiposFalla)
+                {
+                    <MudButton Variant="@(_tipoFallaSeleccionado == t.Id ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary" Size="Size.Small" Style="text-transform:none;"
+                               StartIcon="@Icons.Material.Filled.ReportProblem"
+                               OnClick="@(() => _tipoFallaSeleccionado = t.Id)">
+                        @t.Descripcion
+                    </MudButton>
+                }
+            </MudStack>
+
+            <MudTextField T="string" @bind-Value="_concepto" Label="Concepto" Variant="Variant.Outlined"
+                          Lines="3" Class="mb-4" />
+
+            <MudSwitch T="bool" @bind-Value="_conFecha" Color="Color.Primary"
+                       Label="Definir fecha de vencimiento" Class="mb-2" />
+            @if (_conFecha)
+            {
+                <MudStack Row="true" Spacing="2">
+                    <MudDatePicker @bind-Date="_fechaVencimiento" Label="Fecha" Variant="Variant.Outlined"
+                                   MinDate="DateTime.Today" Style="max-width:190px;" />
+                    <MudTimePicker @bind-Time="_horaVencimiento" Label="Hora" Variant="Variant.Outlined"
+                                   Style="max-width:150px;" />
+                </MudStack>
+            }
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => _altaAbierta = false)">Cancelar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_guardando" OnClick="Guardar">
+                @(_guardando ? "Guardando..." : "Guardar")
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    private record Renglon(int IdLocal, string Estatus, string Folio, string FechaVencimiento,
+        string TiempoRestante, string Tipo, string Concepto);
+
+    private record TipoFalla(int Id, string Descripcion);
+
+    private readonly DialogOptions _opcionesDialog = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+    private List<Renglon> _lista = [];
+    private List<TipoFalla> _tiposFalla = [];
+    private bool _cargando;
+    private bool _altaAbierta;
+    private bool _guardando;
+
+    private int _tipoFallaSeleccionado;
+    private string _concepto = string.Empty;
+    private bool _conFecha;
+    private DateTime? _fechaVencimiento = DateTime.Today;
+    private TimeSpan? _horaVencimiento = new TimeSpan(12, 0, 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Cargar();
+        await CargarTiposFalla();
+    }
+
+    private async Task Cargar()
+    {
+        _cargando = true;
+        try
+        {
+            // Convenciones de frmRequerimientosOP: es_monitor=0, tipo "O".
+            DataTable dt = await Requerimientos.RecuperaRequerimientosAsync(
+                Sesion.IdUsuario, Contexto.Bloque, esMonitor: 0, tipo: "O");
+
+            _lista = dt.Rows.Cast<DataRow>().Select(r => new Renglon(
+                Convert.ToInt32(r["id_local"]),
+                Texto(r, "Estatus"),
+                Texto(r, "Folio"),
+                Texto(r, "fecha_vencimiento"),
+                Texto(r, "tiempo_restante"),
+                Texto(r, "Tipo"),
+                Texto(r, "concepto_corto"))).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task CargarTiposFalla()
+    {
+        try
+        {
+            DataTable dt = await Requerimientos.RecuperaTipoFallaAsync("--- Seleccione ---", "O");
+
+            // El SP devuelve (valor, texto) para el combo; primera fila es el placeholder.
+            _tiposFalla = dt.Rows.Cast<DataRow>()
+                .Select(r => new TipoFalla(Convert.ToInt32(r[0]), Convert.ToString(r[1]) ?? string.Empty))
+                .Where(t => t.Id > 0)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar tipos de falla: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task Guardar()
+    {
+        if (_tipoFallaSeleccionado == 0)
+        {
+            Snackbar.Add("Debe seleccionar un tipo de falla.", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_concepto))
+        {
+            Snackbar.Add("Debe capturar un concepto.", Severity.Warning);
+            return;
+        }
+
+        _guardando = true;
+        try
+        {
+            DateTime vencimiento = _conFecha && _fechaVencimiento is not null
+                ? _fechaVencimiento.Value.Date + (_horaVencimiento ?? TimeSpan.Zero)
+                : DateTime.Now;
+
+            // Convenciones del original: prioridad 0, monto 0, dirigido vacío, tipo "O".
+            int id = await Requerimientos.GuardaRequerimientoAsync(
+                idPrioridad: "0", fechaVencimiento: vencimiento, concepto: _concepto.Trim(), monto: 0,
+                dirigido: string.Empty, idUsuario: Sesion.IdUsuario, bloqueAlta: Contexto.Bloque,
+                tipo: "O", idTipoFalla: _tipoFallaSeleccionado);
+
+            if (id > 0)
+            {
+                Snackbar.Add("Se guardó el requerimiento correctamente.", Severity.Success);
+                _altaAbierta = false;
+                _concepto = string.Empty;
+                _tipoFallaSeleccionado = 0;
+                _conFecha = false;
+                await Cargar();
+            }
+            else
+            {
+                Snackbar.Add("El requerimiento no se guardó.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private async Task Terminar(Renglon r)
+    {
+        bool? ok = await Dialogos.ShowMessageBox("Terminar requerimiento",
+            $"¿Marcar como terminado el folio {r.Folio}?", yesText: "Sí, terminar", cancelText: "No");
+
+        if (ok != true)
+            return;
+
+        try
+        {
+            string resultado = await Requerimientos.TerminaRequerimientoAsync(r.IdLocal, Sesion.IdUsuario, Contexto.Bloque);
+            Snackbar.Add(resultado == "Ok" ? "Requerimiento terminado." : resultado,
+                resultado == "Ok" ? Severity.Success : Severity.Warning);
+            await Cargar();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task Borrar(Renglon r)
+    {
+        bool? ok = await Dialogos.ShowMessageBox("Borrar requerimiento",
+            $"¿Borrar el folio {r.Folio}?", yesText: "Sí, borrar", cancelText: "No");
+
+        if (ok != true)
+            return;
+
+        try
+        {
+            string resultado = await Requerimientos.BorrarRequerimientoAsync(r.IdLocal, Sesion.IdUsuario, Contexto.Bloque);
+            Snackbar.Add(resultado == "Ok" ? "Requerimiento borrado." : resultado,
+                resultado == "Ok" ? Severity.Success : Severity.Warning);
+            await Cargar();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static string Texto(DataRow r, string columna) =>
+        r.Table.Columns.Contains(columna) && r[columna] is not DBNull ? Convert.ToString(r[columna]) ?? "" : "";
+}
