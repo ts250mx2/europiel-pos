@@ -1,0 +1,192 @@
+@page "/sincronizacion"
+@implements IDisposable
+@inject EuropielPos.App.Servicios.SincronizadorFondo Sincronizador
+@inject EuropielPos.Data.Services.Sincronizacion.ISincronizacionEstadoService Estado
+@inject EuropielPos.Data.Services.Sincronizacion.ISincronizacionOrquestador Orquestador
+@inject EuropielPos.Domain.Sesion.SesionPos Sesion
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@if (!Sesion.Autenticado)
+{
+    <MudAlert Severity="Severity.Warning" Class="ma-8">
+        Sesión no iniciada. <MudLink Href="/">Ir al login</MudLink>
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/inicio"))" />
+            <MudText Typo="Typo.h5"><b>Sincronización</b></MudText>
+        </MudStack>
+
+        @* ---------- Estado (el lblStatusBar del original) ---------- *@
+        <MudAlert Severity="@(Sincronizador.Corriendo ? Severity.Info : Severity.Normal)"
+                  Icon="@(Sincronizador.Corriendo ? Icons.Material.Filled.Sync : Icons.Material.Filled.CloudDone)"
+                  Class="mb-4">
+            @Sincronizador.UltimoMensaje
+        </MudAlert>
+
+        @if (Sincronizador.Corriendo)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+        }
+
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-6">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Sync"
+                       Disabled="Sincronizador.Corriendo" OnClick="SincronizarAhora">
+                Sincronizar ahora
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.EventRepeat"
+                       Disabled="Sincronizador.Corriendo" OnClick="SincronizarCitas">
+                Sincronizar citas
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CalendarMonth"
+                       Disabled="_sincronizandoAgenda" OnClick="SincronizarAgenda">
+                @(_sincronizandoAgenda ? "Sincronizando..." : "Sincronizar agenda")
+            </MudButton>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Primary" OnClick="Refrescar" />
+        </MudStack>
+
+        @* ---------- Pendientes por enviar ---------- *@
+        <MudText Typo="Typo.h6" Class="mb-2"><b>Pendientes por enviar</b></MudText>
+        @if (_pendientes is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-6" />
+        }
+        else
+        {
+            <MudGrid Class="mb-6" Spacing="2">
+                @foreach (var (nombre, icono, cuenta) in Tarjetas())
+                {
+                    <MudItem xs="6" sm="3">
+                        <MudPaper Elevation="1" Class="pa-3 rounded-xl d-flex align-center gap-3">
+                            <MudIcon Icon="@icono" Color="@(cuenta > 0 ? Color.Warning : Color.Success)" />
+                            <div>
+                                <MudText Typo="Typo.h6" Style="line-height:1;">@cuenta</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@nombre</MudText>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        @* ---------- Bitácora ---------- *@
+        <MudText Typo="Typo.h6" Class="mb-2"><b>Últimas corridas</b></MudText>
+        <MudPaper Elevation="2" Class="rounded-xl" Style="overflow:hidden;">
+            <MudSimpleTable Hover="true" Dense="true">
+                <thead>
+                    <tr><th>Proceso</th><th>Inicio</th><th>Fin</th><th>Resultado</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in _corridas)
+                    {
+                        <tr>
+                            <td>@l.Tipo</td>
+                            <td>@l.FechaInicio?.ToString("dd/MM HH:mm:ss")</td>
+                            <td>@l.FechaFin?.ToString("dd/MM HH:mm:ss")</td>
+                            <td>
+                                @if (l.Mensaje == "OK")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">OK</MudChip>
+                                }
+                                else if (l.FechaFin is null)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">En curso</MudChip>
+                                }
+                                else
+                                {
+                                    <MudTooltip Text="@l.Mensaje">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">
+                                            @Recorta(l.Mensaje)
+                                        </MudChip>
+                                    </MudTooltip>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    private EuropielPos.Data.Services.Sincronizacion.PendientesSincronizacion? _pendientes;
+    private List<EuropielPos.Data.Entities.LogInterfaz> _corridas = [];
+    private bool _sincronizandoAgenda;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Sincronizador.Cambio += AlCambiar;
+
+        if (Sesion.Autenticado)
+            await Refrescar();
+    }
+
+    private (string, string, int)[] Tarjetas() =>
+    [
+        ("Pacientes", Icons.Material.Filled.People, _pendientes!.Pacientes),
+        ("Paquetes", Icons.Material.Filled.Inventory2, _pendientes.Paquetes),
+        ("Pagos", Icons.Material.Filled.Payments, _pendientes.Pagos),
+        ("Citas", Icons.Material.Filled.CalendarMonth, _pendientes.Citas),
+        ("Requerimientos", Icons.Material.Filled.Assignment, _pendientes.Requerimientos),
+        ("GIOs", Icons.Material.Filled.Badge, _pendientes.Gios),
+        ("Asistencias", Icons.Material.Filled.HowToReg, _pendientes.Asistencias),
+        ("Resp. Netpay", Icons.Material.Filled.CreditCard, _pendientes.RespuestasNetpay),
+    ];
+
+    private async Task Refrescar()
+    {
+        try
+        {
+            _pendientes = await Estado.CuentaPendientesAsync();
+            _corridas = await Estado.UltimasCorridasAsync(30);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al consultar el estado: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private void AlCambiar() =>
+        _ = InvokeAsync(async () =>
+        {
+            // Al terminar una corrida se refrescan pendientes y bitácora.
+            if (!Sincronizador.Corriendo)
+                await Refrescar();
+
+            StateHasChanged();
+        });
+
+    private async Task SincronizarAhora() => await Sincronizador.CorrerInterfazAsync();
+
+    private async Task SincronizarCitas() => await Sincronizador.CorrerCitasAsync();
+
+    private async Task SincronizarAgenda()
+    {
+        _sincronizandoAgenda = true;
+        try
+        {
+            await Orquestador.SincronizarAgendaAsync();
+            Snackbar.Add("Agenda sincronizada.", Severity.Success);
+            await Refrescar();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al sincronizar la agenda: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _sincronizandoAgenda = false;
+        }
+    }
+
+    private static string Recorta(string? s) =>
+        string.IsNullOrEmpty(s) ? "" : s.Length <= 40 ? s : s[..40] + "…";
+
+    public void Dispose() => Sincronizador.Cambio -= AlCambiar;
+}

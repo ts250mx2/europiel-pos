@@ -79,6 +79,8 @@ static class Program
         builder.Services.AddScoped<IInterfazTransaccionesRestantes>(s => s.GetRequiredService<InterfazTransaccionesService>());
         builder.Services.AddScoped<IInterfazExtras>(s => s.GetRequiredService<InterfazTransaccionesService>());
         builder.Services.AddScoped<ISincronizacionOrquestador, SincronizacionOrquestador>();
+        builder.Services.AddScoped<ISincronizacionEstadoService, SincronizacionEstadoService>();
+        builder.Services.AddSingleton<Servicios.SincronizadorFondo>();
         builder.Services.AddScoped<ICheckInGiosService, CheckInGiosService>();
         builder.Services.AddScoped<IUploadDocumentosService, UploadDocumentosService>();
         builder.Services.AddHttpClient<IFeeniciaService, FeeniciaService>();
@@ -92,6 +94,10 @@ static class Program
         builder.Services.AddTransient<MainForm>();
 
         using var host = builder.Build();
+
+        // Timers de sincronización del MDI original (4 min interfaz / 2 min citas);
+        // solo trabajan cuando hay sesión iniciada.
+        host.Services.GetRequiredService<Servicios.SincronizadorFondo>().Iniciar();
 
         var mainForm = host.Services.GetRequiredService<MainForm>();
         Application.Run(mainForm);
