@@ -65,6 +65,7 @@ static class Program
         builder.Services.AddScoped<IClientesService, ClientesService>();
         builder.Services.AddScoped<ICajaService, CajaService>();
         builder.Services.AddScoped<EuropielPos.Data.Services.Impresion.IReciboTicketService, EuropielPos.Data.Services.Impresion.ReciboTicketService>();
+        builder.Services.AddScoped<EuropielPos.Data.Services.Reportes.IReporteCentralService, EuropielPos.Data.Services.Reportes.ReporteCentralService>();
 
         // Motor de sincronización con el servidor central
         builder.Services.AddSingleton<EuropielPos.Domain.Sincronizacion.ContextoPos>();
