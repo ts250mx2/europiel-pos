@@ -1,0 +1,545 @@
+@page "/gios"
+@using System.Data
+@using EuropielPos.Domain.Gios
+@using EuropielPos.Domain.Sincronizacion
+@inject EuropielPos.Data.Services.IGioService GioServicio
+@inject EuropielPos.Data.Services.IReconocimientoFacialService Reconocimiento
+@inject EuropielPos.Data.Services.ISucursalService SucursalServicio
+@inject EuropielPos.Data.Services.Sincronizacion.ICheckInGiosService CheckIn
+@inject EuropielPos.Domain.Sincronizacion.ContextoPos Contexto
+@inject EuropielPos.Domain.Sesion.SesionPos Sesion
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@if (!Sesion.Autenticado)
+{
+    <MudAlert Severity="Severity.Warning" Class="ma-8">
+        Sesión no iniciada. <MudLink Href="/">Ir al login</MudLink>
+    </MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/inicio"))" />
+            <MudText Typo="Typo.h5"><b>GIOs</b></MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                       OnClick="AbrirNuevoGio">
+                Nuevo GIO
+            </MudButton>
+        </MudStack>
+
+        <MudGrid>
+            @* ---------- Check-in facial (Reko) ---------- *@
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-6 rounded-xl" Style="height:100%;">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Face" Color="Color.Primary" Style="font-size:2.5rem;" />
+                        <MudText Typo="Typo.h6"><b>Check-in facial</b></MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+                        Dispara la toma de fotos en la tablet de reconocimiento (Reko)
+                        y registra el check-in del GIO reconocido.
+                    </MudText>
+
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.CameraAlt"
+                                   Disabled="_procesandoFacial" OnClick="IniciarTomaFotos">
+                            @(_procesandoFacial ? "Esperando respuesta..." : "Iniciar toma de fotos")
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.HourglassBottom"
+                                   Disabled="_procesandoFacial" OnClick="BuscarPendiente">
+                            Buscar respuesta pendiente
+                        </MudButton>
+                    </MudStack>
+
+                    @if (_procesandoFacial)
+                    {
+                        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+                    }
+
+                    @if (_mensajeFacial is not null)
+                    {
+                        <MudAlert Severity="@_severidadFacial" Class="mt-4">@_mensajeFacial</MudAlert>
+                    }
+
+                    @if (_reconocido is not null)
+                    {
+                        <MudPaper Elevation="0" Class="pa-4 mt-4 rounded-xl d-flex flex-column align-center"
+                                  Style="border: 2px solid var(--mud-palette-success);">
+                            @if (!string.IsNullOrEmpty(_reconocido.Picture))
+                            {
+                                <MudImage Src="@_reconocido.Picture" Width="160" Class="rounded-lg mb-2"
+                                          ObjectFit="ObjectFit.Cover" />
+                            }
+                            <MudText Typo="Typo.h6" Align="Align.Center">@_reconocido.Name</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3" Align="Align.Center">
+                                Si no es esta persona repórtalo con tu gerente.
+                            </MudText>
+                            <MudStack Row="true" Spacing="2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                           StartIcon="@Icons.Material.Filled.CheckCircle"
+                                           OnClick="@(() => _reconocido = null)">
+                                    Se reconoció
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                                           StartIcon="@Icons.Material.Filled.Delete"
+                                           Disabled="_borrandoCheckin" OnClick="BorrarCheckin">
+                                    @(_borrandoCheckin ? "Borrando..." : "Borrar check-in")
+                                </MudButton>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            @* ---------- Check-in manual ---------- *@
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-6 rounded-xl" Style="height:100%;">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.HowToReg" Color="Color.Secondary" Style="font-size:2.5rem;" />
+                        <MudText Typo="Typo.h6"><b>Check-in manual</b></MudText>
+                    </MudStack>
+
+                    @if (_cargandoGios)
+                    {
+                        <MudProgressLinear Indeterminate="true" Color="Color.Secondary" />
+                    }
+                    else if (_gios.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No hay GIOs registrados en esta plaza.</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Selecciona el GIO</MudText>
+                        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
+                            @foreach (var g in _gios)
+                            {
+                                <MudButton Variant="@(_gioSeleccionado == g.IdLocal ? Variant.Filled : Variant.Outlined)"
+                                           Color="Color.Secondary" Size="Size.Small" Style="text-transform:none;"
+                                           StartIcon="@Icons.Material.Filled.Badge"
+                                           OnClick="@(() => SeleccionarGio(g.IdLocal))">
+                                    @g.Nombre
+                                </MudButton>
+                            }
+                        </MudStack>
+                    }
+
+                    @if (_gioSeleccionado > 0)
+                    {
+                        <MudStack Row="true" Spacing="2" Class="mb-4">
+                            <MudChip T="string" Icon="@Icons.Material.Filled.Schedule" Color="Color.Secondary" Variant="Variant.Text">
+                                Horario: @_horarioGio
+                            </MudChip>
+                            <MudChip T="string" Icon="@Icons.Material.Filled.WbSunny" Color="Color.Secondary" Variant="Variant.Text">
+                                Turno: @_nombreTurnoGio
+                            </MudChip>
+                        </MudStack>
+
+                        <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.TaskAlt"
+                                   Disabled="_guardandoAsistencia" OnClick="GuardarAsistencia">
+                            @(_guardandoAsistencia ? "Guardando..." : "Guardar asistencia")
+                        </MudButton>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+
+    @* ---------- Dialog de alta de GIO ---------- *@
+    <MudDialog @bind-Visible="_altaAbierta" Options="_opcionesDialog">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Nuevo GIO</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudTextField T="string" @bind-Value="_nombre" Label="Nombre" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField T="string" @bind-Value="_nombreCuenta" Label="Nombre de la cuenta" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField T="string" @bind-Value="_banco" Label="Banco" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField T="string" @bind-Value="_clabe" Label="CLABE interbancaria" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField T="string" @bind-Value="_telefono" Label="Teléfono" Variant="Variant.Outlined" Class="mb-4" />
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Horario</MudText>
+            <MudStack Row="true" Spacing="2" Class="mb-4">
+                <MudButton Variant="@(_horario == "L-J" ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.DateRange" OnClick="@(() => _horario = "L-J")">
+                    L-J
+                </MudButton>
+                <MudButton Variant="@(_horario == "V-D" ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Weekend" OnClick="@(() => _horario = "V-D")">
+                    V-D
+                </MudButton>
+            </MudStack>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Turno</MudText>
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                @foreach (var t in _turnos)
+                {
+                    <MudButton Variant="@(_idTurno == t.Id ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                               Size="Size.Small" Style="text-transform:none;"
+                               StartIcon="@Icons.Material.Filled.Schedule"
+                               OnClick="@(() => _idTurno = t.Id)">
+                        @t.Descripcion
+                    </MudButton>
+                }
+            </MudStack>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => _altaAbierta = false)">Cancelar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_guardandoGio" OnClick="GuardarNuevoGio">
+                @(_guardandoGio ? "Guardando..." : "Guardar")
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    private record GioRenglon(int IdLocal, string Nombre);
+
+    private record Turno(int Id, string Descripcion);
+
+    private readonly DialogOptions _opcionesDialog = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+    // Check-in manual
+    private List<GioRenglon> _gios = [];
+    private bool _cargandoGios;
+    private int _gioSeleccionado;
+    private string _horarioGio = string.Empty;
+    private string _nombreTurnoGio = string.Empty;
+    private int _idTurnoGio;
+    private bool _guardandoAsistencia;
+
+    // Check-in facial
+    private bool _procesandoFacial;
+    private bool _borrandoCheckin;
+    private string? _mensajeFacial;
+    private Severity _severidadFacial = Severity.Info;
+    private RespuestaFromReko? _reconocido;
+    private DateTime? _inicioTurno1;
+    private DateTime? _inicioTurno2;
+
+    // Alta de GIO
+    private bool _altaAbierta;
+    private bool _guardandoGio;
+    private List<Turno> _turnos = [];
+    private string _nombre = string.Empty;
+    private string _nombreCuenta = string.Empty;
+    private string _banco = string.Empty;
+    private string _clabe = string.Empty;
+    private string _telefono = string.Empty;
+    private string _horario = string.Empty;
+    private int _idTurno;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Sesion.Autenticado)
+            return;
+
+        await CargarGios();
+        await CargarTurnos();
+
+        // Turnos de check-in configurados en la sucursal (como frmLogin).
+        var sucursal = await SucursalServicio.RecuperaSucursalAsync(Contexto.IdSucursal);
+        _inicioTurno1 = FechaCheckin.HoraDeHoy(sucursal?.GioInicioTurno1, DateTime.Now);
+        _inicioTurno2 = FechaCheckin.HoraDeHoy(sucursal?.GioInicioTurno2, DateTime.Now);
+    }
+
+    private async Task CargarGios()
+    {
+        _cargandoGios = true;
+        try
+        {
+            DataTable dt = await GioServicio.RecuperaGiosPorCiudadAsync(Contexto.IdSucursal, "--Seleccione--");
+
+            _gios = dt.Rows.Cast<DataRow>()
+                .Select(r => new GioRenglon(Convert.ToInt32(r["id_local"]), Convert.ToString(r["nombre"]) ?? ""))
+                .Where(g => g.IdLocal > 0) // descarta el renglón "--Seleccione--" del combo original
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar GIOs: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _cargandoGios = false;
+        }
+    }
+
+    private async Task CargarTurnos()
+    {
+        try
+        {
+            DataTable dt = await GioServicio.RecuperaTurnoAsync("--Seleccione--");
+
+            _turnos = dt.Rows.Cast<DataRow>()
+                .Select(r => new Turno(Convert.ToInt32(r["id"]), Convert.ToString(r["descripcion"]) ?? ""))
+                .Where(t => t.Id > 0)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error al cargar turnos: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task SeleccionarGio(int idLocal)
+    {
+        _gioSeleccionado = idLocal;
+        try
+        {
+            DataTable dt = await GioServicio.RecuperaGioAsync(idLocal);
+
+            if (dt.Rows.Count > 0)
+            {
+                _horarioGio = Convert.ToString(dt.Rows[0]["horario"]) ?? "";
+                _nombreTurnoGio = Convert.ToString(dt.Rows[0]["nombre_turno"]) ?? "";
+                _idTurnoGio = dt.Rows[0]["id_turno"] is DBNull ? 0 : Convert.ToInt32(dt.Rows[0]["id_turno"]);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task GuardarAsistencia()
+    {
+        // Validación de frmCheckinGIO.
+        if (_idTurnoGio == 0 || _gioSeleccionado == 0)
+        {
+            Snackbar.Add("Debe seleccionar un Turno y un Gio", Severity.Warning);
+            return;
+        }
+
+        _guardandoAsistencia = true;
+        try
+        {
+            string existe = await GioServicio.GuardaGioAsistenciaAsync(
+                _gioSeleccionado, Contexto.IdSucursal, Contexto.Bloque, DateTime.Now,
+                _idTurnoGio, _horarioGio, Sesion.IdUsuario);
+
+            // El SP devuelve "No" (no existía) cuando la asistencia se guardó.
+            if (existe == "No")
+            {
+                Snackbar.Add("Se guardo la asistencia correctamente", Severity.Success);
+                _gioSeleccionado = 0;
+                _horarioGio = string.Empty;
+                _nombreTurnoGio = string.Empty;
+                _idTurnoGio = 0;
+            }
+            else
+            {
+                Snackbar.Add("Este GIO ya tiene un check in el día de hoy.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _guardandoAsistencia = false;
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Check-in facial (flujo de MDIForm: IniciarTomaDeFotosV2 + Reko)
+    // ---------------------------------------------------------------
+
+    private async Task IniciarTomaFotos()
+    {
+        _procesandoFacial = true;
+        _mensajeFacial = null;
+        _reconocido = null;
+        try
+        {
+            var respuesta = await CheckIn.IniciarTomaDeFotosV2Async("Gio", Sesion.IdUsuario);
+            await ProcesaRespuestaReko(respuesta);
+        }
+        catch (Exception ex)
+        {
+            _severidadFacial = Severity.Error;
+            _mensajeFacial = "Ocurrió un error al conectarse al servidor de reconocimiento. Favor de intentar en un momento. (" + ex.Message + ")";
+        }
+        finally
+        {
+            _procesandoFacial = false;
+        }
+    }
+
+    private async Task BuscarPendiente()
+    {
+        _procesandoFacial = true;
+        _mensajeFacial = null;
+        _reconocido = null;
+        try
+        {
+            string idFeedback = await Reconocimiento.RecuperaReconocimientoFacialPendienteAsync("Gio");
+
+            if (idFeedback == "")
+            {
+                Snackbar.Add("No hay check-ins pendientes de respuesta.", Severity.Info);
+                return;
+            }
+
+            var respuesta = await CheckIn.GetResponseFromRekoAsync(idFeedback);
+
+            if (respuesta.Message == "Sin respuesta")
+            {
+                Snackbar.Add("El servidor de reconocimiento aún no responde. Intenta más tarde.", Severity.Info);
+                return;
+            }
+
+            respuesta.IdFeedback = idFeedback;
+            await ProcesaRespuestaReko(respuesta);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _procesandoFacial = false;
+        }
+    }
+
+    private async Task ProcesaRespuestaReko(RespuestaFromReko respuesta)
+    {
+        if (!string.IsNullOrEmpty(respuesta.Message))
+        {
+            _severidadFacial = Severity.Error;
+            _mensajeFacial = "OCURRIÓ UN ERROR AL CONECTARSE AL SERVIDOR DE RECONOCIMIENTO. FAVOR DE INTENTAR EN UN MOMENTO.";
+            return;
+        }
+
+        // Amarra el GIO reconocido a la bitácora local (como MostrarUsuarioReconocido).
+        await Reconocimiento.ActualizaGioReconocimientoFacialAsync(respuesta.IdFeedback ?? "", respuesta.IdGio ?? 0);
+
+        string nombre = (respuesta.IdGio ?? 0) > 0 ? respuesta.Name ?? "" : "";
+
+        if (nombre != "" && respuesta.Estatus != "P")
+        {
+            _reconocido = respuesta;
+            _severidadFacial = Severity.Success;
+            _mensajeFacial = "SE RECONOCIÓ DE FORMA EXITOSA A " + nombre;
+        }
+        else if (respuesta.Estatus == "P")
+        {
+            _severidadFacial = Severity.Warning;
+            _mensajeFacial = (respuesta.MsgEstatus ?? "").Replace("{nombre_usuario}", respuesta.Name);
+        }
+        else
+        {
+            _severidadFacial = Severity.Warning;
+            _mensajeFacial = (respuesta.IdGio ?? 0) switch
+            {
+                -1 => "NO SE DETECTÓ AL GIO EN LA CÁMARA.",
+                -2 => "LA CÁMARA NO PUDO TOMAR FOTOS PARA RECONOCER AL GIO.",
+                _ => "NO SE PUDO RECONOCER AL GIO. ASEGÚRATE DE QUE ESTÉN TODAS LAS FOTOGRAFÍAS DE MANERA CORRECTA.",
+            };
+        }
+
+        // Marca el intento de check-in del turno como atendido.
+        DateTime fechaCheckin = FechaCheckin.ParaCheckinManualGio(DateTime.Now, _inicioTurno1, _inicioTurno2);
+        await Reconocimiento.ActualizaLogSucursalEstatusAsync(Contexto.IdSucursal, "Gio", fechaCheckin, Sesion.IdUsuario, false);
+    }
+
+    private async Task BorrarCheckin()
+    {
+        if (_reconocido is null)
+            return;
+
+        _borrandoCheckin = true;
+        try
+        {
+            string resultado = await CheckIn.DeleteCheckinFacialRecognitionAsync(
+                _reconocido.IdFeedback ?? "", _reconocido.IdGio ?? 0);
+
+            if (resultado == "OK")
+            {
+                Snackbar.Add("Check-in borrado.", Severity.Success);
+                _reconocido = null;
+                _mensajeFacial = null;
+            }
+            else
+            {
+                Snackbar.Add(resultado, Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _borrandoCheckin = false;
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Alta de GIO (panel pnlNuevoGio de frmCheckinGIO)
+    // ---------------------------------------------------------------
+
+    private void AbrirNuevoGio()
+    {
+        _nombre = _nombreCuenta = _banco = _clabe = _telefono = string.Empty;
+        _horario = string.Empty;
+        _idTurno = 0;
+        _altaAbierta = true;
+    }
+
+    private async Task GuardarNuevoGio()
+    {
+        // Validaciones de ValidaCamposGIO, con los mismos mensajes.
+        var faltantes = new List<string>();
+        if (_nombre == "") faltantes.Add("Debe seleccionar un Nombre");
+        if (_banco == "") faltantes.Add("Debe capturar un Banco");
+        if (_clabe == "") faltantes.Add("Debe capturar una Clabe Interbancaria");
+        if (_horario == "") faltantes.Add("Debe seleccionar un horario");
+        if (_idTurno == 0) faltantes.Add("Debe seleccionar un turno");
+
+        if (faltantes.Count > 0)
+        {
+            Snackbar.Add(string.Join(" · ", faltantes), Severity.Warning);
+            return;
+        }
+
+        _guardandoGio = true;
+        try
+        {
+            string existe = await GioServicio.ValidaExisteGioAsync(_nombre, _nombreCuenta, _clabe);
+
+            if (existe == "Si")
+            {
+                Snackbar.Add("El Gio ya existe favor de revisar.", Severity.Warning);
+                return;
+            }
+
+            int id = await GioServicio.GuardaGioAsync(0, _nombre, _nombreCuenta, _banco, _clabe,
+                Contexto.IdSucursal, Contexto.Bloque, _telefono, _horario, _idTurno, 1, Sesion.IdUsuario);
+
+            if (id > 0)
+            {
+                Snackbar.Add("Se guardo el gio correctamente", Severity.Success);
+                _altaAbierta = false;
+                await CargarGios();
+            }
+            else
+            {
+                Snackbar.Add("No se pudo guardar el GIO.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _guardandoGio = false;
+        }
+    }
+}
